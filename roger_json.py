@@ -1,3 +1,6 @@
+import json
+
+
 def _reader(file_obj, separator='--'):
     separator = separator + '\n'
 
@@ -17,8 +20,16 @@ def _reader(file_obj, separator='--'):
     # make sure no data was dropped
     assert not ''.join(json_buffer).strip(), 'input json must end with "--" separator!'
 
+def _write(file_obj, json_iterator, separator='--', max_io_attempts=3):
+    separator = separator + '\n'
 
-class RogerReader:
+    for json_obj in json_iterator:
+        json_str
+        for io_attempt in range(max_io_attempts):
+            try:
+                file_obj.write()
+
+class RogerReader(object):
     def __init__(self, f, separator='--', unique=True):
         self._reader = _reader(f, separator)
         self.obj_num = 0
@@ -31,25 +42,20 @@ class RogerReader:
         return self
 
     def next(self):
-        item = self._reader.next()
-
-        # unlike the basic reader, we prefer not to return blanks,
-        # because we will typically wind up with a dict full of None
-        # values
-        while row == []:
-            row = self.reader.next()
-        d = dict(zip(self.fieldnames, row))
-        lf = len(self.fieldnames)
-        lr = len(row)
-        if lf < lr:
-            d[self.restkey] = row[lf:]
-        elif lf > lr:
-            for key in self.fieldnames[lr:]:
-                d[key] = self.restval
-        return d
+        json_buffer = self._reader.next()
+        json_obj = json.loads(''.join(json_buffer))
+        json_hash = hash(json.dumps(json_obj, sort_keys=True, ensure_ascii=False, allow_nan=False))
+        if self.seen is not None:
+            while json_hash in self.seen:
+                json_buffer = self._reader.next()
+                json_obj = json.loads(''.join(json_buffer))
+                json_hash = hash(json.dumps(json_obj, sort_keys=True, ensure_ascii=False, allow_nan=False))
+            self.seen.add(json_hash)
+        self.obj_num += 1
+        return json_obj
 
 
-class DictWriter:
+class RogerWriter(object):
     def __init__(self, f, fieldnames, restval="", extrasaction="raise",
                  dialect="excel", *args, **kwds):
         self.fieldnames = fieldnames  # list of keys for the dict
