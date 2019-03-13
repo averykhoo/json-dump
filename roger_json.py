@@ -21,7 +21,7 @@ def _reader(file_obj, separator='--'):
     assert not ''.join(json_buffer).strip(), 'input json must end with {repr(separator)} separator!'
 
 
-class RogerReader(object):
+class RogerReader:
     def __init__(self, f, separator='--', unique=True, close=False):
         self._reader = _reader(f, separator)
         self.obj_num = 0
@@ -35,7 +35,7 @@ class RogerReader(object):
     def __iter__(self):
         return self
 
-    def next(self):
+    def __next__(self):
         json_buffer = next(self._reader)
         json_obj = json.loads(''.join(json_buffer))
 
@@ -55,7 +55,7 @@ class RogerReader(object):
         ret = []
         for _ in range(n):
             try:
-                ret.append(self.next())
+                ret.append(next(self))
             except StopIteration:
                 break
         return ret
@@ -64,11 +64,12 @@ class RogerReader(object):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        print('exiting')
         if self.close:
             self.file_obj.close()
 
 
-class RogerWriter(object):
+class RogerWriter:
     def __init__(self, f, separator='--', unique=True, close=False):
         self.separator_blob = f'\n{separator}\n'
         self.file_obj = f
@@ -102,59 +103,75 @@ class RogerWriter(object):
         pass
 
 
-def ropen(path, mode='r', gz=None):
-    if mode not in 'rwax':
-        raise IOError('Mode "{mode}" not supported')
 
-    if mode == 'r':
-        # determine whether to use gzip
-        if gz is None:
-            with open(path, mode='rb') as f:
-                b = f.read(2)
-                if b == b'\x1f\x8b':
-                    _open = gzip.open
-                else:
-                    print('text_mode', repr(b))
-                    _open = open
-        elif gz:
-            _open = gzip.open
-        else:
-            _open = open
 
-        # open file and return reader
-        return RogerReader(_open(path, mode='rt', encoding='utf8'), close=True)
+class RogerOpen:
+    def __init__(self, path, mode='r', gz=None):
+        if mode not in 'rwax':
+            raise IOError('Mode "{mode}" not supported')
 
-    else:
-        # determine whether to use gzip
-        if gz is None:
-            if path.endswith('gz'):
+        if mode == 'r':
+            # determine whether to use gzip
+            if gz is None:
+                with open(path, mode='rb') as f:
+                    b = f.read(2)
+                    if b == b'\x1f\x8b':
+                        _open = gzip.open
+                    else:
+                        print('text_mode', repr(b))
+                        _open = open
+            elif gz:
                 _open = gzip.open
             else:
                 _open = open
-        elif gz:
-            _open = gzip.open
-        else:
-            _open = open
 
-        # open file and return writer
-        return RogerWriter(_open(path, mode=mode + 't', encoding='utf8'), close=True)
+            # open file and return reader
+            self.file_obj = _open(path, mode='rt', encoding='utf8')
+            self.rw_obj = RogerReader(self.file_obj)
+
+        else:
+            # determine whether to use gzip
+            if gz is None:
+                if path.endswith('gz'):
+                    _open = gzip.open
+                else:
+                    _open = open
+            elif gz:
+                _open = gzip.open
+            else:
+                _open = open
+
+            # open file and return writer
+            self.file_obj = _open(path, mode=mode + 't', encoding='utf8')
+            self.rw_obj = RogerWriter(self.file_obj)
+
+    def __enter__(self):
+        return self.rw_obj
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.file_obj.close()
+        pass
+
+
+
 
 
 if __name__ == '__main__':
-    with ropen('test.txt.gz', 'w') as f:
+    with RogerOpen('test.txt.gz', 'w') as f:
         f.write({'test': 1})
-    f.file_obj.close()
+    # print(1)
+    # f.file_obj.close()
+    # print(2)
 
-
-    with ropen('test.txt.gz') as f:
+    with RogerOpen('test.txt.gz') as f:
         print(f.read_n(10))
 
-    with ropen('test.txt.gz', 'a') as f:
+    with RogerOpen('test.txt.gz', 'a') as f:
         f.write({'test': 2})
 
-    with ropen('test.txt.gz') as f:
+    with RogerOpen('test.txt.gz') as f:
         for j in f:
             print(j)
 
-    with ropen('test.txt.gz', 'x') as f:
+    with RogerOpen('test.txt.gz', 'x') as f:
         f.write({'test': 2})
