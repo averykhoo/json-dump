@@ -1,3 +1,5 @@
+import gzip
+import io
 import json
 
 
@@ -20,14 +22,6 @@ def _reader(file_obj, separator='--'):
     # make sure no data was dropped
     assert not ''.join(json_buffer).strip(), 'input json must end with "--" separator!'
 
-def _write(file_obj, json_iterator, separator='--', max_io_attempts=3):
-    separator = separator + '\n'
-
-    for json_obj in json_iterator:
-        json_str
-        for io_attempt in range(max_io_attempts):
-            try:
-                file_obj.write()
 
 class RogerReader(object):
     def __init__(self, f, separator='--', unique=True):
@@ -44,46 +38,106 @@ class RogerReader(object):
     def next(self):
         json_buffer = self._reader.next()
         json_obj = json.loads(''.join(json_buffer))
-        json_hash = hash(json.dumps(json_obj, sort_keys=True, ensure_ascii=False, allow_nan=False))
+
+        # if UNIQUE flag is set
         if self.seen is not None:
+            json_hash = hash(json.dumps(json_obj, sort_keys=True, ensure_ascii=False, allow_nan=False))
             while json_hash in self.seen:
                 json_buffer = self._reader.next()
                 json_obj = json.loads(''.join(json_buffer))
                 json_hash = hash(json.dumps(json_obj, sort_keys=True, ensure_ascii=False, allow_nan=False))
             self.seen.add(json_hash)
+
         self.obj_num += 1
         return json_obj
 
+    def read_n(self, n=1):
+        ret = []
+        for _ in range(n):
+            try:
+                ret.append(self.next())
+            except StopIteration:
+                break
+        return ret
+
 
 class RogerWriter(object):
-    def __init__(self, f, fieldnames, restval="", extrasaction="raise",
-                 dialect="excel", *args, **kwds):
-        self.fieldnames = fieldnames  # list of keys for the dict
-        self.restval = restval  # for writing short dicts
-        if extrasaction.lower() not in ("raise", "ignore"):
-            raise ValueError, \
-                ("extrasaction (%s) must be 'raise' or 'ignore'" %
-                 extrasaction)
-        self.extrasaction = extrasaction
-        self.writer = writer(f, dialect, *args, **kwds)
+    def __init__(self, f, separator='--', unique=True):
+        self.separator_blob = '\n' + separator + '\n'
+        self.file_obj = f
+        self.obj_num = 0
+        if unique:
+            self.seen = set()
+        else:
+            self.seen = None
 
-    def writeheader(self):
-        header = dict(zip(self.fieldnames, self.fieldnames))
-        self.writerow(header)
+    def write(self, json_obj):
+        formatted_json = json.dumps(json_obj, indent=4, sort_keys=True, ensure_ascii=False, allow_nan=False)
 
-    def _dict_to_list(self, rowdict):
-        if self.extrasaction == "raise":
-            wrong_fields = [k for k in rowdict if k not in self.fieldnames]
-            if wrong_fields:
-                raise ValueError("dict contains fields not in fieldnames: "
-                                 + ", ".join([repr(x) for x in wrong_fields]))
-        return [rowdict.get(key, self.restval) for key in self.fieldnames]
+        # if UNIQUE flag is set
+        if self.seen is not None:
+            json_hash = hash(formatted_json)
+            if json_hash in self.seen:
+                return False
+            self.seen.add(json_hash)
 
-    def writerow(self, rowdict):
-        return self.writer.writerow(self._dict_to_list(rowdict))
+        self.file_obj.write(formatted_json + self.separator_blob)
+        self.obj_num += 1
+        return True
 
-    def writerows(self, rowdicts):
-        rows = []
-        for rowdict in rowdicts:
-            rows.append(self._dict_to_list(rowdict))
-        return self.writer.writerows(rows)
+
+def ropen(path, mode='r', gz=None):
+    if mode not in 'rwax':
+        raise IOError, 'Mode ' + mode + ' not supported'
+
+    if mode == 'r':
+        # determine whether to use gzip
+        if gz is None:
+            with open(path, mode='rb') as f:
+                if f.read(2) == b'\x1f\x8b':
+                    _open = gzip.open
+                else:
+                    _open = io.open
+        elif gz:
+            _open = gzip.open
+        else:
+            _open = io.open
+
+        # open file and return reader
+        with _open(path, mode='rt', encoding='utf8') as f:
+            return RogerReader(f)
+
+    else:
+        # determine whether to use gzip
+        if gz is None:
+            if path.endswith('gz'):
+                _open = gzip.open
+            else:
+                _open = io.open
+        elif gz:
+            _open = gzip.open
+        else:
+            _open = io.open
+
+        # open file and return writer
+        with _open(path, mode=mode + 't', encoding='utf8') as f:
+            return RogerWriter(f)
+
+
+if __name__ == '__main__':
+    with ropen('test.txt.gz', 'w') as f:
+        f.write({'test':1})
+
+
+    with ropen('test.txt.gz') as f:
+        print(f.read_many(10))
+
+    with ropen('test.txt.gz', 'a') as f:
+        f.write({'test':2})
+
+    with ropen('test.txt.gz') as f:
+        for j in f:
+            print(j)
+
+    with ropen('test.txt.gz', 'x') as f:
+        f.write({'test':2})
