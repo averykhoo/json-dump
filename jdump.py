@@ -1,7 +1,9 @@
+import glob
 import gzip
 import io
 import json
 import os
+import warnings
 
 
 def _reader(file_obj, separator='--'):
@@ -70,18 +72,19 @@ class RogerReader:
 
 
 class RogerWriter:
-    def __init__(self, f, separator='--', unique=True, close=False):
+    def __init__(self, f, separator='--', unique=True, indent=4):
         self.separator_blob = f'\n{separator}\n'
         self.file_obj = f
         self.obj_num = 0
         self.close = False
+        self.indent = indent
         if unique:
             self.seen = set()
         else:
             self.seen = None
 
     def write(self, json_obj):
-        formatted_json = json.dumps(json_obj, indent=4, sort_keys=True, ensure_ascii=False, allow_nan=False)
+        formatted_json = json.dumps(json_obj, indent=self.indent, sort_keys=True, ensure_ascii=False, allow_nan=False)
 
         # if UNIQUE flag is set
         if self.seen is not None:
@@ -104,7 +107,7 @@ class RogerWriter:
 
 
 class RogerOpen:
-    def __init__(self, path, mode='r', gz=None, encoding='utf8'):
+    def __init__(self, path, mode='r', gz=None, encoding='utf8', unique=True):
         # verify mode
         if mode not in 'rwax':
             raise IOError('Mode "{mode}" not supported')
@@ -119,8 +122,8 @@ class RogerOpen:
         self.gz = None
         self.rw_obj = None
 
-        # read mode
-        if mode == 'r':
+        # read/append mode (don't create new file)
+        if mode in 'ra':
 
             # determine whether to use gzip
             if gz is None:
@@ -137,50 +140,18 @@ class RogerOpen:
             else:
                 _open = open
 
-            # create file obj and reader
-            self.file_obj = _open(self.path, mode='rt', encoding=encoding)
-            self.rw_obj = RogerReader(self.file_obj)
-
-        # write mode
-        elif mode == 'a':
-            # normalize filename
-            filename = os.path.basename(self.path)
-
-            # handle compressed txt
-            if filename.endswith('.gz'):
-                filename = filename[:-3]
-                self.gz = True
-
-            # some other gzip file
-            if filename.endswith('gz'):
-                self.gz = True
-
-            # determine whether to use gzip
-            if gz is None:
-                if self.gz:
-                    # _open = gzip.open
-                    self.file_obj = open(self.path, mode='ab')
-                    self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode=mode + 'b', fileobj=self.file_obj),
-                                               encoding=encoding)
-                else:
-                    self.file_obj = open(self.path, mode='at', encoding=encoding)
-            elif gz:
-                # _open = gzip.open
-                self.file_obj = open(self.path, mode='ab')
-                self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode=mode + 'b', fileobj=self.file_obj),
-                                           encoding=encoding)
+            # create file obj and reader/writer
+            if mode == 'r':
+                self.file_obj = _open(self.path, mode='rt', encoding=encoding)
+                self.rw_obj = RogerReader(self.file_obj, unique=unique)
             else:
-                # _open = open
-                self.file_obj = open(self.path, mode='at', encoding=encoding)
+                assert mode == 'a'
+                self.file_obj = _open(self.path, mode='at', encoding=encoding)
+                self.rw_obj = RogerWriter(self.file_obj, unique=unique)
 
-            # # open file and return writer
-            if self.gz is None:
-                self.rw_obj = RogerWriter(self.file_obj)
-            else:
-                self.rw_obj = RogerWriter(self.gz)
-
-        # write mode
+        # write/create mode (create new file)
         else:
+            assert mode in 'wx'
             if mode == 'x' and os.path.exists(self.path):
                 raise FileExistsError(f'File exists: {self.path}')
 
@@ -217,9 +188,9 @@ class RogerOpen:
 
             # # open file and return writer
             if self.gz is None:
-                self.rw_obj = RogerWriter(self.file_obj)
+                self.rw_obj = RogerWriter(self.file_obj, unique=unique)
             else:
-                self.rw_obj = RogerWriter(self.gz)
+                self.rw_obj = RogerWriter(self.gz, unique=unique)
 
     def __enter__(self):
         return self.rw_obj
@@ -238,6 +209,36 @@ class RogerOpen:
             os.rename(self.temp_path, self.path)
 
 
+def yield_json(input_glob, unique=True, verbose=True):
+    input_paths = sorted(glob.glob(os.path.abspath(input_glob), recursive=True))
+    if not input_paths:
+        warnings.warn(f'zero files found matching <{input_glob}>')
+
+    if unique:
+        seen = set()
+    else:
+        seen = None
+
+    for i, path in enumerate(input_paths):
+        if verbose:
+            print(f'[{i+1}/{len(input_paths)}] ({os.path.getsize(path)}) {path}')
+
+        with RogerOpen(path) as f:
+            for json_obj in f:
+                if seen is not None:
+                    json_hash = hash(json.dumps(json_obj, sort_keys=True, ensure_ascii=False, allow_nan=False))
+                    if json_hash in seen:
+                        continue
+                    seen.add(json_hash)
+                yield json_obj
+
+
+def write_json(json_iterator, path, overwrite=False, unique=True, write_blank=True):
+    with RogerOpen(path, mode='w' if overwrite else 'x', unique=True) as f:
+        for json_obj in json_iterator:
+            f.write(json_obj)
+
+
 if __name__ == '__main__':
     with RogerOpen('test.txt', 'w') as f:
         f.write({'test': 1})
@@ -249,10 +250,9 @@ if __name__ == '__main__':
     with RogerOpen('test.txt', 'a') as f:
         f.write({'test': 2})
 
-    with RogerOpen('test.txt') as f:
-        print(2)
-        for j in f:
-            print(j)
+    print(2)
+    for j in yield_json('test.txt*'):
+        print(j)
 
     # os.remove('test.txt.gz')
     with RogerOpen('test.txt.gz', 'w') as f:
