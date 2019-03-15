@@ -1,2 +1,10 @@
-# json_dump
-a hopefully pythonic interface to dump json blobs to a file
+#   JSON dump
+tries to be a pythonic interface to serialize json objects to plaintext files
+
+
+##  Usage
+-   TODO
+
+
+##  Why "--"
+-   As far as I can tell, this is very unlikely to exist in valid JSON
