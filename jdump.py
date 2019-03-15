@@ -5,13 +5,11 @@ import os
 
 
 def _reader(file_obj, separator='--'):
-    separator = separator + '\n'
-
     json_buffer = []
     for line in file_obj:
 
         # append until we reach json object separator
-        if line != separator:
+        if line.rstrip('\r\n') != separator:
             json_buffer.append(line)
             continue
 
@@ -108,7 +106,7 @@ class RogerWriter:
 class RogerOpen:
     def __init__(self, path, mode='r', gz=None, encoding='utf8'):
         # verify mode
-        if mode not in 'rwx':
+        if mode not in 'rwax':
             raise IOError('Mode "{mode}" not supported')
         self.mode = mode
 
@@ -144,6 +142,44 @@ class RogerOpen:
             self.rw_obj = RogerReader(self.file_obj)
 
         # write mode
+        elif mode == 'a':
+            # normalize filename
+            filename = os.path.basename(self.path)
+
+            # handle compressed txt
+            if filename.endswith('.gz'):
+                filename = filename[:-3]
+                self.gz = True
+
+            # some other gzip file
+            if filename.endswith('gz'):
+                self.gz = True
+
+            # determine whether to use gzip
+            if gz is None:
+                if self.gz:
+                    # _open = gzip.open
+                    self.file_obj = open(self.path, mode='ab')
+                    self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode=mode + 'b', fileobj=self.file_obj),
+                                               encoding=encoding)
+                else:
+                    self.file_obj = open(self.path, mode='at', encoding=encoding)
+            elif gz:
+                # _open = gzip.open
+                self.file_obj = open(self.path, mode='ab')
+                self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode=mode + 'b', fileobj=self.file_obj),
+                                           encoding=encoding)
+            else:
+                # _open = open
+                self.file_obj = open(self.path, mode='at', encoding=encoding)
+
+            # # open file and return writer
+            if self.gz is None:
+                self.rw_obj = RogerWriter(self.file_obj)
+            else:
+                self.rw_obj = RogerWriter(self.gz)
+
+        # write mode
         else:
             if mode == 'x' and os.path.exists(self.path):
                 raise FileExistsError(f'File exists: {self.path}')
@@ -165,19 +201,19 @@ class RogerOpen:
             if gz is None:
                 if self.gz:
                     # _open = gzip.open
-                    self.file_obj = open(self.temp_path, mode=mode + 'b')
+                    self.file_obj = open(self.temp_path, mode='wb')
                     self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode=mode + 'b', fileobj=self.file_obj),
                                                encoding=encoding)
                 else:
-                    self.file_obj = open(self.temp_path, mode=mode + 't', encoding=encoding)
+                    self.file_obj = open(self.temp_path, mode='wt', encoding=encoding)
             elif gz:
                 # _open = gzip.open
-                self.file_obj = open(self.temp_path, mode=mode + 'b')
+                self.file_obj = open(self.temp_path, mode='wb')
                 self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode=mode + 'b', fileobj=self.file_obj),
                                            encoding=encoding)
             else:
                 # _open = open
-                self.file_obj = open(self.temp_path, mode=mode + 't', encoding=encoding)
+                self.file_obj = open(self.temp_path, mode='wt', encoding=encoding)
 
             # # open file and return writer
             if self.gz is None:
@@ -210,7 +246,7 @@ if __name__ == '__main__':
         print(1)
         print(f.read_n(10))
 
-    with RogerOpen('test.txt', 'w') as f:
+    with RogerOpen('test.txt', 'a') as f:
         f.write({'test': 2})
 
     with RogerOpen('test.txt') as f:
