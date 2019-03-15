@@ -108,11 +108,13 @@ class RogerWriter:
 class RogerOpen:
     def __init__(self, path, mode='r', gz=None, encoding='utf8'):
         # verify mode
-        if mode not in 'rwax':
+        if mode not in 'rwx':
             raise IOError('Mode "{mode}" not supported')
+        self.mode = mode
 
         # normalize path
-        path = os.path.abspath(path)
+        self.path = os.path.abspath(path)
+        self.temp_path = None
 
         # init file objects
         self.file_obj = None
@@ -124,7 +126,7 @@ class RogerOpen:
 
             # determine whether to use gzip
             if gz is None:
-                with open(path, mode='rb') as f:
+                with open(self.path, mode='rb') as f:
                     b = f.read(2)
                     if b == b'\x1f\x8b':
                         _open = gzip.open
@@ -138,43 +140,44 @@ class RogerOpen:
                 _open = open
 
             # create file obj and reader
-            self.file_obj = _open(path, mode='rt', encoding=encoding)
+            self.file_obj = _open(self.path, mode='rt', encoding=encoding)
             self.rw_obj = RogerReader(self.file_obj)
 
         # write mode
         else:
-            # normalize filename
-            filename = os.path.basename(path)
+            if mode == 'x' and os.path.exists(self.path):
+                raise FileExistsError(f'File exists: {self.path}')
 
-            # handle compressed rjson
-            if filename.endswith('.rgz'):
-                filename = filename[:-4] + '.rjson'
-                self.gz = True
+                # normalize filename
+            filename = os.path.basename(self.path)
+            self.temp_path = self.path + '.partial'
 
             # handle compressed txt
             if filename.endswith('.gz'):
                 filename = filename[:-3]
-                self.gz=True
+                self.gz = True
 
             # some other gzip file
             if filename.endswith('gz'):
-                self.gz=True
+                self.gz = True
 
             # determine whether to use gzip
             if gz is None:
                 if self.gz:
                     # _open = gzip.open
-                    self.file_obj = open(path, mode=mode+'b')
-                    self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode=mode+'b', fileobj=self.file_obj), encoding=encoding)
+                    self.file_obj = open(self.temp_path, mode=mode + 'b')
+                    self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode=mode + 'b', fileobj=self.file_obj),
+                                               encoding=encoding)
                 else:
-                    self.file_obj = open(path, mode=mode + 't', encoding=encoding)
+                    self.file_obj = open(self.temp_path, mode=mode + 't', encoding=encoding)
             elif gz:
                 # _open = gzip.open
-                self.file_obj = open(path, mode=mode+'b')
-                self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode=mode+'b', fileobj=self.file_obj), encoding=encoding)
+                self.file_obj = open(self.temp_path, mode=mode + 'b')
+                self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode=mode + 'b', fileobj=self.file_obj),
+                                           encoding=encoding)
             else:
                 # _open = open
-                self.file_obj = open(path, mode=mode + 't', encoding=encoding)
+                self.file_obj = open(self.temp_path, mode=mode + 't', encoding=encoding)
 
             # # open file and return writer
             if self.gz is None:
@@ -188,7 +191,15 @@ class RogerOpen:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.gz is not None:
             self.gz.close()
+
         self.file_obj.close()
+
+        if self.temp_path is not None:
+            if os.path.exists(self.path):
+                if self.mode == 'x':
+                    raise FileExistsError(f'File was created during writing: {self.path}')
+                os.remove(self.path)
+            os.rename(self.temp_path, self.path)
 
 
 if __name__ == '__main__':
@@ -199,7 +210,7 @@ if __name__ == '__main__':
         print(1)
         print(f.read_n(10))
 
-    with RogerOpen('test.txt', 'a') as f:
+    with RogerOpen('test.txt', 'w') as f:
         f.write({'test': 2})
 
     with RogerOpen('test.txt') as f:
