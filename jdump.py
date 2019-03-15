@@ -4,6 +4,7 @@ import io
 import json
 import os
 import warnings
+from typing import Union
 
 
 def _reader(file_obj, separator='--'):
@@ -53,7 +54,7 @@ class RogerReader:
         self.obj_num += 1
         return json_obj
 
-    def read_n(self, n=1):
+    def read(self, n=1):
         ret = []
         for _ in range(n):
             try:
@@ -192,7 +193,7 @@ class RogerOpen:
             else:
                 self.rw_obj = RogerWriter(self.gz, unique=unique)
 
-    def __enter__(self):
+    def __enter__(self) -> Union(RogerReader, RogerWriter):
         return self.rw_obj
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -245,7 +246,7 @@ if __name__ == '__main__':
 
     with RogerOpen('test.txt') as f:
         print(1)
-        print(f.read_n(10))
+        print(f.read(10))
 
     with RogerOpen('test.txt', 'a') as f:
         f.write({'test': 2})
@@ -261,4 +262,4 @@ if __name__ == '__main__':
     # os.remove('test.txt.gz')
     with RogerOpen('test.txt.gz') as f:
         print(3)
-        print(f.read_n(10))
+        print(f.read(10))
