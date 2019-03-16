@@ -21,10 +21,10 @@ def _reader(file_obj, separator='--'):
         json_buffer = []
 
     # make sure no data was dropped
-    assert not ''.join(json_buffer).strip(), 'input json must end with {repr(separator)} separator!'
+    assert not ''.join(json_buffer).strip(), f'input json must end with {repr(separator)} separator!'
 
 
-class RogerReader:
+class DumpReader:
     def __init__(self, f, separator='--', unique=True, close=False):
         self._reader = _reader(f, separator)
         self.obj_num = 0
@@ -39,40 +39,34 @@ class RogerReader:
         return self
 
     def __next__(self):
-        json_buffer = next(self._reader)
-        json_obj = json.loads(''.join(json_buffer))
+        json_obj = json.loads(''.join(next(self._reader)))
 
         # if UNIQUE flag is set
         if self.seen is not None:
             json_hash = hash(json.dumps(json_obj, sort_keys=True, ensure_ascii=False, allow_nan=False))
             while json_hash in self.seen:
-                json_buffer = next(self._reader)
-                json_obj = json.loads(''.join(json_buffer))
+                json_obj = json.loads(''.join(next(self._reader)))
                 json_hash = hash(json.dumps(json_obj, sort_keys=True, ensure_ascii=False, allow_nan=False))
             self.seen.add(json_hash)
 
         self.obj_num += 1
         return json_obj
 
-    def read(self, n=1):
+    def read(self, n=-1):
         ret = []
-        for _ in range(n):
-            try:
-                ret.append(next(self))
-            except StopIteration:
-                break
+        if n >= 0:
+            for _ in range(n):
+                try:
+                    ret.append(next(self))
+                except StopIteration:
+                    break
+        else:
+            for obj in self:
+                ret.append(obj)
         return ret
 
-    def __enter__(self):
-        return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        print('exiting')
-        if self.close:
-            self.file_obj.close()
-
-
-class RogerWriter:
+class DumpWriter:
     def __init__(self, f, separator='--', unique=True, indent=4):
         self.separator_blob = f'\n{separator}\n'
         self.file_obj = f
@@ -85,6 +79,12 @@ class RogerWriter:
             self.seen = None
 
     def write(self, json_obj):
+        """
+        write a single json object
+
+        :param json_obj:
+        :return:
+        """
         formatted_json = json.dumps(json_obj, indent=self.indent, sort_keys=True, ensure_ascii=False, allow_nan=False)
 
         # if UNIQUE flag is set
@@ -98,20 +98,15 @@ class RogerWriter:
         self.obj_num += 1
         return True
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.close:
-            self.file_obj.close()
-        pass
+    def writemany(self, json_iterator):
+        return sum(self.write(obj) for obj in json_iterator)
 
 
-class RogerOpen:
+class DumpOpener:
     def __init__(self, path, mode='r', gz=None, encoding='utf8', unique=True):
         # verify mode
         if mode not in 'rwax':
-            raise IOError('Mode "{mode}" not supported')
+            raise IOError(f'Mode "{mode}" not supported')
         self.mode = mode
 
         # normalize path
@@ -128,27 +123,27 @@ class RogerOpen:
 
             # determine whether to use gzip
             if gz is None:
-                with open(self.path, mode='rb') as f:
+                with io.open(self.path, mode='rb') as f:
                     b = f.read(2)
                     if b == b'\x1f\x8b':
                         _open = gzip.open
                     else:
-                        _open = open
+                        _open = io.open
 
             elif gz:
                 _open = gzip.open
 
             else:
-                _open = open
+                _open = io.open
 
             # create file obj and reader/writer
             if mode == 'r':
                 self.file_obj = _open(self.path, mode='rt', encoding=encoding)
-                self.rw_obj = RogerReader(self.file_obj, unique=unique)
+                self.rw_obj = DumpReader(self.file_obj, unique=unique)
             else:
                 assert mode == 'a'
                 self.file_obj = _open(self.path, mode='at', encoding=encoding)
-                self.rw_obj = RogerWriter(self.file_obj, unique=unique)
+                self.rw_obj = DumpWriter(self.file_obj, unique=unique)
 
         # write/create mode (create new file)
         else:
@@ -173,27 +168,27 @@ class RogerOpen:
             if gz is None:
                 if self.gz:
                     # _open = gzip.open
-                    self.file_obj = open(self.temp_path, mode='wb')
+                    self.file_obj = io.open(self.temp_path, mode='wb')
                     self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode=mode + 'b', fileobj=self.file_obj),
                                                encoding=encoding)
                 else:
-                    self.file_obj = open(self.temp_path, mode='wt', encoding=encoding)
+                    self.file_obj = io.open(self.temp_path, mode='wt', encoding=encoding)
             elif gz:
                 # _open = gzip.open
-                self.file_obj = open(self.temp_path, mode='wb')
+                self.file_obj = io.open(self.temp_path, mode='wb')
                 self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode=mode + 'b', fileobj=self.file_obj),
                                            encoding=encoding)
             else:
                 # _open = open
-                self.file_obj = open(self.temp_path, mode='wt', encoding=encoding)
+                self.file_obj = io.open(self.temp_path, mode='wt', encoding=encoding)
 
             # # open file and return writer
             if self.gz is None:
-                self.rw_obj = RogerWriter(self.file_obj, unique=unique)
+                self.rw_obj = DumpWriter(self.file_obj, unique=unique)
             else:
-                self.rw_obj = RogerWriter(self.gz, unique=unique)
+                self.rw_obj = DumpWriter(self.gz, unique=unique)
 
-    def __enter__(self) -> Union(RogerReader, RogerWriter):
+    def __enter__(self) -> [DumpReader, DumpWriter]:
         return self.rw_obj
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -222,9 +217,9 @@ def yield_json(input_glob, unique=True, verbose=True):
 
     for i, path in enumerate(input_paths):
         if verbose:
-            print(f'[{i+1}/{len(input_paths)}] ({os.path.getsize(path)}) {path}')
+            print(f'[{i + 1}/{len(input_paths)}] ({os.path.getsize(path)}) {path}')
 
-        with RogerOpen(path) as f:
+        with DumpOpener(path) as f:
             for json_obj in f:
                 if seen is not None:
                     json_hash = hash(json.dumps(json_obj, sort_keys=True, ensure_ascii=False, allow_nan=False))
@@ -234,21 +229,20 @@ def yield_json(input_glob, unique=True, verbose=True):
                 yield json_obj
 
 
-def write_json(json_iterator, path, overwrite=False, unique=True, write_blank=True):
-    with RogerOpen(path, mode='w' if overwrite else 'x', unique=True) as f:
-        for json_obj in json_iterator:
-            f.write(json_obj)
+def write_json(json_iterator, path, overwrite=False, unique=True):
+    with DumpOpener(path, mode='w' if overwrite else 'x', unique=unique) as f:
+        f.writemany(json_iterator)
 
 
 if __name__ == '__main__':
-    with RogerOpen('test.txt', 'w') as f:
+    with DumpOpener('test.txt', 'w') as f:
         f.write({'test': 1})
 
-    with RogerOpen('test.txt') as f:
+    with DumpOpener('test.txt') as f:
         print(1)
         print(f.read(10))
 
-    with RogerOpen('test.txt', 'a') as f:
+    with DumpOpener('test.txt', 'a') as f:
         f.write({'test': 2})
 
     print(2)
@@ -256,10 +250,10 @@ if __name__ == '__main__':
         print(j)
 
     # os.remove('test.txt.gz')
-    with RogerOpen('test.txt.gz', 'w') as f:
+    with DumpOpener('test.txt.gz', 'w') as f:
         f.write({'test': 3})
 
     # os.remove('test.txt.gz')
-    with RogerOpen('test.txt.gz') as f:
+    with DumpOpener('test.txt.gz') as f:
         print(3)
         print(f.read(10))
