@@ -4,7 +4,6 @@ import io
 import json
 import os
 import warnings
-from typing import Union
 
 
 def _reader(file_obj, separator='--'):
@@ -205,7 +204,7 @@ class DumpOpener:
             os.rename(self.temp_path, self.path)
 
 
-def yield_json(input_glob, unique=True, verbose=True):
+def load(input_glob, unique=True, verbose=True):
     input_paths = sorted(glob.glob(os.path.abspath(input_glob), recursive=True))
     if not input_paths:
         warnings.warn(f'zero files found matching <{input_glob}>')
@@ -229,31 +228,23 @@ def yield_json(input_glob, unique=True, verbose=True):
                 yield json_obj
 
 
-def write_json(json_iterator, path, overwrite=False, unique=True):
+def dump(json_iterator, path, overwrite=True, unique=True):
+    """
+    like json.dump but writes many objects to a single output file
+
+    :param json_iterator:
+    :param path:
+    :param overwrite:
+    :param unique:
+    :return:
+    """
     with DumpOpener(path, mode='w' if overwrite else 'x', unique=unique) as f:
-        f.writemany(json_iterator)
+        return f.writemany(json_iterator)
 
 
-if __name__ == '__main__':
-    with DumpOpener('test.txt', 'w') as f:
-        f.write({'test': 1})
+# be more like the gzip library
+open = DumpOpener
 
-    with DumpOpener('test.txt') as f:
-        print(1)
-        print(f.read(10))
-
-    with DumpOpener('test.txt', 'a') as f:
-        f.write({'test': 2})
-
-    print(2)
-    for j in yield_json('test.txt*'):
-        print(j)
-
-    # os.remove('test.txt.gz')
-    with DumpOpener('test.txt.gz', 'w') as f:
-        f.write({'test': 3})
-
-    # os.remove('test.txt.gz')
-    with DumpOpener('test.txt.gz') as f:
-        print(3)
-        print(f.read(10))
+# be more like the csv library
+reader = DumpReader
+writer = DumpWriter
