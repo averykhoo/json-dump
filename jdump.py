@@ -154,13 +154,12 @@ class DumpOpener:
             filename = os.path.basename(self.path)
             self.temp_path = self.path + '.partial'
 
-            # handle compressed txt
-            if filename.endswith('.gz'):
+            # correct the filename for a compressed file
+            if filename.lower().endswith('.gz'):
                 filename = filename[:-3]
-                self.gz = True
 
-            # some other gzip file
-            if filename.endswith('gz'):
+            # detect gzipped file
+            if filename.lower().endswith('gz'):
                 self.gz = True
 
             # determine whether to use gzip
