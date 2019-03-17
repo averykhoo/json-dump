@@ -1,6 +1,6 @@
 #   JSON dump
-Tries (but not very hard) to be a pythonic way to serialize json objects to plaintext / gzipped plaintext
-
+-   Tries (but not very hard) to be a pythonic way to serialize json objects to plaintext / gzipped plaintext
+-   NOTE: Drops duplicates by default, set `unique=False` to read/write all objects 
 
 ##  Usage
 
