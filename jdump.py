@@ -228,8 +228,15 @@ class DumpOpener:
             if mode == 'x' and os.path.exists(self.path):
                 raise FileExistsError(f'File already exists: {self.path}')
 
-            # normalize filename
+            # normalize filename for gzip
             filename = os.path.basename(self.path)
+
+            # prepare dir to write to
+            if not os.path.isdir(os.path.dirname(self.path)):
+                assert not os.path.exists(os.path.dirname(self.path)), 'parent dir is not dir'
+                os.makedirs(os.path.dirname(self.path))
+
+            # prepare file to write to
             self.temp_path = self.path + '.partial'
 
             # correct the filename for a compressed file
