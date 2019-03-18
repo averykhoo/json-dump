@@ -59,7 +59,6 @@ class DumpReader:
         """
         self._reader = _reader(f, separator)
         self.count = 0
-        self.file_obj = f
         if unique:
             self.seen = set()
         else:
@@ -147,8 +146,8 @@ class DumpWriter:
         write a single json object
         (given a list, writes the entire list as a single object)
 
-        :param json_obj:
-        :return:
+        :param json_obj: object to write
+        :return: True if object was written, else False (eg. for duplicates)
         """
         formatted_json = json.dumps(json_obj, indent=self.indent, sort_keys=True, ensure_ascii=False, allow_nan=False)
 
@@ -169,7 +168,7 @@ class DumpWriter:
         (given a list, writes each item in the list separately)
 
         :param json_iterator:
-        :return:
+        :return: number of objects written
         """
         return sum(self.write(obj) for obj in json_iterator)
 
@@ -274,17 +273,26 @@ class DumpFile:
                 self.rw_obj = DumpWriter(self.gz, unique=unique)
 
     def close(self):
+        # first close the gzip textIO object
         if self.gz is not None:
             self.gz.close()
+            self.gz = None
 
-        self.file_obj.close()
+        # then close the actual file
+        if self.file_obj is None:
+            warnings.warn(f'File already closed: ({self.path})')
+        else:
+            self.file_obj.close()
+            self.file_obj = None
 
+        # finally rename the temp path
         if self.temp_path is not None:
             if os.path.exists(self.path):
                 if self.mode == 'x':
                     raise FileExistsError(f'File was created during writing: {self.path}')
                 os.remove(self.path)
             os.rename(self.temp_path, self.path)
+            self.temp_path = None
 
     def __enter__(self):
         return self
