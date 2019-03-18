@@ -1,5 +1,7 @@
 #   JSON dump
-NOTE: Drops duplicates by default, set `unique=False` to read/write all objects 
+The original page for this project is `https://github.com/averykhoo/json_dump`
+NOTE: Default behavior is to drop duplicates when reading/writing, set `unique=False` to read/write all objects
+
 
 ##  Usage
 
