@@ -242,13 +242,13 @@ class DumpFile:
             # prepare file to write to
             self.temp_path = self.path + '.partial'
 
-            # correct the filename for a compressed file
-            if filename.lower().endswith('.gz'):
-                filename = filename[:-3]
-
             # detect gzipped file
             if filename.lower().endswith('gz'):
                 self.gz = True
+
+            # correct the filename for a compressed file
+            if filename.lower().endswith('.gz'):
+                filename = filename[:-3]
 
             # determine whether to use gzip
             if gz is None:
