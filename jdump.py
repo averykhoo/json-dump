@@ -4,9 +4,17 @@ import io
 import json
 import os
 import warnings
+from typing import Union
 
 
-def _reader(file_obj, separator='--'):
+def _reader(file_obj, separator):
+    """
+    don't call this from outside the class pls
+    not very useful to you since it doesn't parse the json
+
+    :param file_obj: file-like object in 'rt' mode
+    :param separator: expected separator
+    """
     json_buffer = []
     for line in file_obj:
 
@@ -20,15 +28,19 @@ def _reader(file_obj, separator='--'):
         json_buffer = []
 
     # make sure no data was dropped
-    assert not ''.join(json_buffer).strip(), f'input json must end with {repr(separator)} separator!'
+    assert not ''.join(json_buffer).strip(), f'input json must end with {repr(separator)}'
 
 
 class DumpReader:
-    def __init__(self, f, separator='--', unique=True, close=False):
+    def __init__(self, f, separator='--', unique=True):
+        """
+        :param f: file-like object (expects mode='rt')
+        :param separator:
+        :param unique: skip (do not yield) duplicate objects
+        """
         self._reader = _reader(f, separator)
         self.obj_num = 0
         self.file_obj = f
-        self.close = close
         if unique:
             self.seen = set()
         else:
@@ -52,6 +64,14 @@ class DumpReader:
         return json_obj
 
     def read(self, n=-1):
+        """
+        read up to n items from the file
+        if less than n items remain in the file, return those items
+        if n < 0, reads all items
+
+        :param n: how many items to read
+        :return: list of n items
+        """
         ret = []
         if n >= 0:
             for _ in range(n):
@@ -64,13 +84,39 @@ class DumpReader:
                 ret.append(obj)
         return ret
 
+    def skip(self, n=1):
+        """
+        skip up to n items from the file
+        does not count towards unique objects returned
+
+        :param n: how many items to skip
+        :return: num objects skipped
+        """
+        assert n > 0
+
+        num_skipped = 0
+
+        try:
+            for _ in range(n):
+                next(self._reader)
+                num_skipped += 1
+        except StopIteration:
+            pass
+
+        return num_skipped
+
 
 class DumpWriter:
     def __init__(self, f, separator='--', unique=True, indent=4):
+        """
+        :param f: file-like object (expects mode='wt')
+        :param separator:
+        :param unique: skip (do not write) duplicate objects
+        :param indent: see python's json docs
+        """
         self.separator_blob = f'\n{separator}\n'
         self.file_obj = f
         self.obj_num = 0
-        self.close = False
         self.indent = indent
         if unique:
             self.seen = set()
@@ -80,6 +126,7 @@ class DumpWriter:
     def write(self, json_obj):
         """
         write a single json object
+        (given a list, writes the entire list as a single object)
 
         :param json_obj:
         :return:
@@ -98,11 +145,25 @@ class DumpWriter:
         return True
 
     def writemany(self, json_iterator):
+        """
+        write multiple json objects from an iterator
+        (given a list, writes each item in the list separately)
+
+        :param json_iterator:
+        :return:
+        """
         return sum(self.write(obj) for obj in json_iterator)
 
 
 class DumpOpener:
-    def __init__(self, path, mode='r', gz=None, encoding='utf8', unique=True):
+    def __init__(self, path, mode='r', gz=None, unique=True):
+        """
+
+        :param path:
+        :param mode:
+        :param gz:
+        :param unique:
+        """
         # verify mode
         if mode not in 'rwax':
             raise IOError(f'Mode "{mode}" not supported')
@@ -137,20 +198,18 @@ class DumpOpener:
 
             # create file obj and reader/writer
             if mode == 'r':
-                self.file_obj = _open(self.path, mode='rt', encoding=encoding)
+                self.file_obj = _open(self.path, mode='rt', encoding='utf8')
                 self.rw_obj = DumpReader(self.file_obj, unique=unique)
             else:
-                assert mode == 'a'
-                self.file_obj = _open(self.path, mode='at', encoding=encoding)
+                self.file_obj = _open(self.path, mode='at', encoding='utf8')
                 self.rw_obj = DumpWriter(self.file_obj, unique=unique)
 
         # write/create mode (create new file)
         else:
-            assert mode in 'wx'
             if mode == 'x' and os.path.exists(self.path):
-                raise FileExistsError(f'File exists: {self.path}')
+                raise FileExistsError(f'File already exists: {self.path}')
 
-                # normalize filename
+            # normalize filename
             filename = os.path.basename(self.path)
             self.temp_path = self.path + '.partial'
 
@@ -167,18 +226,18 @@ class DumpOpener:
                 if self.gz:
                     # _open = gzip.open
                     self.file_obj = io.open(self.temp_path, mode='wb')
-                    self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode=mode + 'b', fileobj=self.file_obj),
-                                               encoding=encoding)
+                    self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode='wb', fileobj=self.file_obj),
+                                               encoding='utf8')
                 else:
-                    self.file_obj = io.open(self.temp_path, mode='wt', encoding=encoding)
+                    self.file_obj = io.open(self.temp_path, mode='wt', encoding='utf8')
             elif gz:
                 # _open = gzip.open
                 self.file_obj = io.open(self.temp_path, mode='wb')
-                self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode=mode + 'b', fileobj=self.file_obj),
-                                           encoding=encoding)
+                self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode='wb', fileobj=self.file_obj),
+                                           encoding='utf8')
             else:
                 # _open = open
-                self.file_obj = io.open(self.temp_path, mode='wt', encoding=encoding)
+                self.file_obj = io.open(self.temp_path, mode='wt', encoding='utf8')
 
             # # open file and return writer
             if self.gz is None:
@@ -186,7 +245,7 @@ class DumpOpener:
             else:
                 self.rw_obj = DumpWriter(self.gz, unique=unique)
 
-    def __enter__(self) -> [DumpReader, DumpWriter]:
+    def __enter__(self) -> Union[DumpReader, DumpWriter]:
         return self.rw_obj
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -204,10 +263,19 @@ class DumpOpener:
 
 
 def load(input_glob, unique=True, verbose=True):
+    """
+    yields json objects from multiple files matching some glob pattern
+    auto-detects gzip compression for each file
+
+    :param input_glob: pattern to match
+    :param unique: yield only unique items
+    :param verbose: print filenames being loaded
+    """
     input_paths = sorted(glob.glob(os.path.abspath(input_glob), recursive=True))
     if not input_paths:
         warnings.warn(f'zero files found matching <{input_glob}>')
 
+    # re-implement unique to remove duplicates from multiple files
     if unique:
         seen = set()
     else:
@@ -231,11 +299,11 @@ def dump(json_iterator, path, overwrite=True, unique=True):
     """
     like json.dump but writes many objects to a single output file
 
-    :param json_iterator:
-    :param path:
-    :param overwrite:
-    :param unique:
-    :return:
+    :param json_iterator: iterator over json objects to be written
+    :param path: output path
+    :param overwrite: overwrite existing file, if any
+    :param unique: don't write duplicates
+    :return: number of objects written
     """
     with DumpOpener(path, mode='w' if overwrite else 'x', unique=unique) as f:
         return f.writemany(json_iterator)
