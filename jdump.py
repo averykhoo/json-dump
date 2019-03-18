@@ -175,6 +175,8 @@ class DumpWriter:
 
 
 class DumpOpener:
+    rw_obj: Union[DumpReader, DumpWriter]
+
     def __init__(self, path, mode='r', gz=None, unique=True):
         """
 
@@ -271,10 +273,7 @@ class DumpOpener:
             else:
                 self.rw_obj = DumpWriter(self.gz, unique=unique)
 
-    def __enter__(self) -> Union[DumpReader, DumpWriter]:
-        return self.rw_obj
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def close(self):
         if self.gz is not None:
             self.gz.close()
 
@@ -286,6 +285,24 @@ class DumpOpener:
                     raise FileExistsError(f'File was created during writing: {self.path}')
                 os.remove(self.path)
             os.rename(self.temp_path, self.path)
+
+    def __enter__(self):
+        return self.rw_obj
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def read(self, n=-1):
+        return self.rw_obj.read(n)
+
+    def write(self, json_obj):
+        return self.rw_obj.write(json_obj)
+
+    def writemany(self, json_iterator):
+        return self.rw_obj.writemany(json_iterator)
+
+    def __iter__(self):
+        return iter(self.rw_obj)
 
 
 def load(input_glob, unique=True, verbose=True):
