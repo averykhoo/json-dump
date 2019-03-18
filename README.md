@@ -1,6 +1,9 @@
 #   JSON dump
+
 The original page for this project is `https://github.com/averykhoo/json_dump`
+
 NOTE: Default behavior is to drop duplicates when reading/writing, set `unique=False` to read/write all objects
+
 
 
 ##  Usage
@@ -30,6 +33,7 @@ with jdump.open('path/to/file.txt', mode='w') as f:
     f.write({'example': ['object']})
 ```
 
+
 ### Read everything from multiple files matching some glob pattern
 ```python
 import jdump
@@ -40,6 +44,7 @@ for json_obj in jdump.load('some/glob/path/**/filename.*'):
     pprint(json_obj)
 ```
 
+
 ### To write a *gzipped* dumpfile
 -   Just append `.gz` to the filename
 -   Gzip compression is auto-detected when reading/appending
@@ -49,6 +54,7 @@ import jdump
 with jdump.open('path/to/file.txt.gz', mode='w') as f:
     f.write({'example': ['object']})
 ```
+
 
 ### Write multiple objects to a file
 ```python
@@ -68,6 +74,7 @@ with jdump.open('path/to/file.txt.gz', mode='w') as f:
 # use `jdump.dump` which takes an iterator and a path (unlike `json.dump` which takes a file object)
 jdump.dump(json_objs, 'path/to/file.txt')
 ```
+
 
 ### Reading/writing on already opened file objects
 -   Usage of `jdump.reader` and `jdump.writer` is similar to `csv.reader` and `csv.writer`
@@ -89,6 +96,7 @@ with open('some_file.txt', 'wt', encoding='utf8') as f:
     d = jdump.writer(f)
     d.write({'example': ['object']})
 ```
+
 
 
 ##  Why `--`
