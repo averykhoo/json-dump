@@ -176,13 +176,15 @@ class DumpWriter:
 class DumpFile:
     rw_obj: Union[DumpReader, DumpWriter]
 
-    def __init__(self, path, mode='r', gz=None, unique=True):
+    def __init__(self, path, mode='r', gz=None, unique=True, encoding='utf8'):
         """
+        note that existing items are not accounted for uniqueness when appending
 
-        :param path:
-        :param mode:
-        :param gz:
-        :param unique:
+        :param path: string / pathlib.Path / pathlib.PurePath
+        :param mode: (r)ead, (w)rite, (a)ppend, e(x)clusive creation
+        :param gz: force gzip or plaintext mode
+        :param unique: only read/write unique objects
+        :param encoding: strongly recommended that you stick with utf-8
         """
         # verify mode
         if mode not in 'rwax':
@@ -218,10 +220,10 @@ class DumpFile:
 
             # create file obj and reader/writer
             if mode == 'r':
-                self.file_obj = _open(self.path, mode='rt', encoding='utf8')
+                self.file_obj = _open(self.path, mode='rt', encoding=encoding)
                 self.rw_obj = DumpReader(self.file_obj, unique=unique)
             else:
-                self.file_obj = _open(self.path, mode='at', encoding='utf8')
+                self.file_obj = _open(self.path, mode='at', encoding=encoding)
                 self.rw_obj = DumpWriter(self.file_obj, unique=unique)
 
         # write/create mode (create new file)
@@ -254,17 +256,17 @@ class DumpFile:
                     # _open = gzip.open
                     self.file_obj = io.open(self.temp_path, mode='wb')
                     self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode='wb', fileobj=self.file_obj),
-                                               encoding='utf8')
+                                               encoding=encoding)
                 else:
-                    self.file_obj = io.open(self.temp_path, mode='wt', encoding='utf8')
+                    self.file_obj = io.open(self.temp_path, mode='wt', encoding=encoding)
             elif gz:
                 # _open = gzip.open
                 self.file_obj = io.open(self.temp_path, mode='wb')
                 self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode='wb', fileobj=self.file_obj),
-                                           encoding='utf8')
+                                           encoding=encoding)
             else:
                 # _open = open
-                self.file_obj = io.open(self.temp_path, mode='wt', encoding='utf8')
+                self.file_obj = io.open(self.temp_path, mode='wt', encoding=encoding)
 
             # # open file and return writer
             if self.gz is None:
@@ -279,16 +281,17 @@ class DumpFile:
             self.gz = None
 
         # then close the actual file
-        if self.file_obj is None:
-            warnings.warn(f'File already closed: ({self.path})')
-        else:
+        if self.file_obj is not None:
             self.file_obj.close()
             self.file_obj = None
+        else:
+            warnings.warn(f'File already closed: ({self.path})')
 
         # finally rename the temp path
         if self.temp_path is not None:
             if os.path.exists(self.path):
                 if self.mode == 'x':
+                    # someone else created the file we want to exclusively create while we were doing stuff
                     raise FileExistsError(f'File was created during writing: {self.path}')
                 os.remove(self.path)
             os.rename(self.temp_path, self.path)

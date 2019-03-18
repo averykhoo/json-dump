@@ -12,8 +12,8 @@ NOTE: Default behavior is to drop duplicates when reading/writing, set `unique=F
 -   Usage of `jdump.open` is similar to `io.open` or `gzip.open`
 -   Valid modes are `r`, `w`, `a`, and `x`
 ```python
-import jdump
 from pprint import pprint
+import jdump
 
 # read an existing (possibly gzipped) file
 with jdump.open('path/to/file.txt', mode='r') as f:
@@ -36,8 +36,8 @@ with jdump.open('path/to/file.txt', mode='w') as f:
 
 ### Read everything from multiple files matching some glob pattern
 ```python
-import jdump
 from pprint import pprint
+import jdump
 
 # mimics `json.load` but is an iterator yielding json objects
 for json_obj in jdump.load('some/glob/path/**/filename.*'):
@@ -79,23 +79,26 @@ jdump.dump(json_objs, 'path/to/file.txt')
 ### Reading/writing on already opened file objects
 -   Usage of `jdump.reader` and `jdump.writer` is similar to `csv.reader` and `csv.writer`
 ```python
-import jdump
-from pprint import pprint
 import gzip
+from pprint import pprint
+import jdump
 
 # read a plaintext file
 with gzip.open('some_file.txt.gz', 'rt') as f: 
     d = jdump.reader(f)
     for json_obj in d:
         pprint(json_obj)
-        
-
 
 # write a gzipped file
 with open('some_file.txt', 'wt', encoding='utf8') as f: 
     d = jdump.writer(f)
     d.write({'example': ['object']})
 ```
+
+
+### Misc functions
+-   `DumpFile.count()` <-- how many items have been read/written since the file was opened
+-   `DumpFile.skip()` <-- skip reading an object (and exclude from read count)
 
 
 
