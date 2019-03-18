@@ -58,7 +58,7 @@ class DumpReader:
         :param unique: skip (do not yield) duplicate objects
         """
         self._reader = _reader(f, separator)
-        self.obj_num = 0
+        self.count = 0
         self.file_obj = f
         if unique:
             self.seen = set()
@@ -79,7 +79,7 @@ class DumpReader:
                 json_hash = hash(json.dumps(json_obj, sort_keys=True, ensure_ascii=False, allow_nan=False))
             self.seen.add(json_hash)
 
-        self.obj_num += 1
+        self.count += 1
         return json_obj
 
     def read(self, n=-1):
@@ -135,7 +135,7 @@ class DumpWriter:
         """
         self.separator_blob = f'\n{separator}\n'
         self.file_obj = f
-        self.obj_num = 0
+        self.count = 0
         self.indent = indent
         if unique:
             self.seen = set()
@@ -160,7 +160,7 @@ class DumpWriter:
             self.seen.add(json_hash)
 
         self.file_obj.write(formatted_json + self.separator_blob)
-        self.obj_num += 1
+        self.count += 1
         return True
 
     def writemany(self, json_iterator):
@@ -174,7 +174,7 @@ class DumpWriter:
         return sum(self.write(obj) for obj in json_iterator)
 
 
-class DumpOpener:
+class DumpFile:
     rw_obj: Union[DumpReader, DumpWriter]
 
     def __init__(self, path, mode='r', gz=None, unique=True):
@@ -287,13 +287,16 @@ class DumpOpener:
             os.rename(self.temp_path, self.path)
 
     def __enter__(self):
-        return self.rw_obj
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
     def read(self, n=-1):
         return self.rw_obj.read(n)
+
+    def skip(self, n=1):
+        return self.rw_obj.skip(n)
 
     def write(self, json_obj):
         return self.rw_obj.write(json_obj)
@@ -303,6 +306,9 @@ class DumpOpener:
 
     def __iter__(self):
         return iter(self.rw_obj)
+
+    def count(self):
+        return self.rw_obj.count
 
 
 def load(input_glob, unique=True, verbose=True):
@@ -328,7 +334,7 @@ def load(input_glob, unique=True, verbose=True):
         if verbose:
             print(f'[{i + 1}/{len(input_paths)}] ({format_bytes(os.path.getsize(path))}) {path}')
 
-        with DumpOpener(path) as f:
+        with DumpFile(path) as f:
             for json_obj in f:
                 if seen is not None:
                     json_hash = hash(json.dumps(json_obj, sort_keys=True, ensure_ascii=False, allow_nan=False))
@@ -348,12 +354,13 @@ def dump(json_iterator, path, overwrite=True, unique=True):
     :param unique: don't write duplicates
     :return: number of objects written
     """
-    with DumpOpener(path, mode='w' if overwrite else 'x', unique=unique) as f:
+    with DumpFile(path, mode='w' if overwrite else 'x', unique=unique) as f:
         return f.writemany(json_iterator)
 
 
 # be more like the gzip library
-open = DumpOpener
+# noinspection PyShadowingBuiltins
+open = DumpFile
 
 # be more like the csv library
 reader = DumpReader
