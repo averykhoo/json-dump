@@ -7,6 +7,25 @@ import warnings
 from typing import Union
 
 
+def format_bytes(num):
+    """
+    string formatting
+    :type num: int
+    :rtype: str
+    """
+    num = abs(num)
+    if num == 0:
+        return '0 Bytes'
+    elif num == 1:
+        return '1 Byte'
+    unit = 0
+    while num >= 1024 and unit < 8:
+        num /= 1024.0
+        unit += 1
+    unit = ['Bytes', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB'][unit]
+    return ('%.2f %s' if num % 1 else '%d %s') % (num, unit)
+
+
 def _reader(file_obj, separator):
     """
     don't call this from outside the class pls
@@ -283,7 +302,7 @@ def load(input_glob, unique=True, verbose=True):
 
     for i, path in enumerate(input_paths):
         if verbose:
-            print(f'[{i + 1}/{len(input_paths)}] ({os.path.getsize(path)}) {path}')
+            print(f'[{i + 1}/{len(input_paths)}] ({format_bytes(os.path.getsize(path))}) {path}')
 
         with DumpOpener(path) as f:
             for json_obj in f:
