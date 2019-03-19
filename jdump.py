@@ -51,11 +51,11 @@ def _reader(file_obj, separator):
 
 
 class DumpReader:
-    def __init__(self, f, separator='--', unique=True):
+    def __init__(self, f, unique=True, separator='--'):
         """
         :param f: file-like object (expects mode='rt')
-        :param separator:
         :param unique: skip (do not yield) duplicate objects
+        :param separator:
         """
         self._reader = _reader(f, separator)
         self.count = 0
@@ -125,11 +125,11 @@ class DumpReader:
 
 
 class DumpWriter:
-    def __init__(self, f, separator='--', unique=True, indent=4):
+    def __init__(self, f, unique=True, separator='--', indent=4):
         """
         :param f: file-like object (expects mode='wt')
-        :param separator:
         :param unique: skip (do not write) duplicate objects
+        :param separator:
         :param indent: see python's json docs
         """
         self.separator_blob = f'\n{separator}\n'
@@ -176,15 +176,16 @@ class DumpWriter:
 class DumpFile:
     rw_obj: Union[DumpReader, DumpWriter]
 
-    def __init__(self, path, mode='r', gz=None, unique=True, encoding='utf8'):
+    def __init__(self, path, mode='r', unique=True, encoding='utf8', newline='\n', gz=None):
         """
         note that existing items are not accounted for uniqueness when appending
 
         :param path: string / pathlib.Path / pathlib.PurePath
         :param mode: (r)ead, (w)rite, (a)ppend, e(x)clusive creation
-        :param gz: force gzip or plaintext mode
         :param unique: only read/write unique objects
         :param encoding: strongly recommended that you stick with utf-8
+        :param newline: recommended that you stick with '\n' because java people hard code these things
+        :param gz: force gzip or plaintext mode
         """
         # verify mode
         if mode not in 'rwax':
@@ -223,7 +224,7 @@ class DumpFile:
                 self.file_obj = _open(self.path, mode='rt', encoding=encoding)
                 self.rw_obj = DumpReader(self.file_obj, unique=unique)
             else:
-                self.file_obj = _open(self.path, mode='at', encoding=encoding)
+                self.file_obj = _open(self.path, mode='at', encoding=encoding, newline=newline)
                 self.rw_obj = DumpWriter(self.file_obj, unique=unique)
 
         # write/create mode (create new file)
@@ -256,17 +257,17 @@ class DumpFile:
                     # _open = gzip.open
                     self.file_obj = io.open(self.temp_path, mode='wb')
                     self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode='wb', fileobj=self.file_obj),
-                                               encoding=encoding)
+                                               encoding=encoding, newline=newline)
                 else:
-                    self.file_obj = io.open(self.temp_path, mode='wt', encoding=encoding)
+                    self.file_obj = io.open(self.temp_path, mode='wt', encoding=encoding, newline=newline)
             elif gz:
                 # _open = gzip.open
                 self.file_obj = io.open(self.temp_path, mode='wb')
                 self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode='wb', fileobj=self.file_obj),
-                                           encoding=encoding)
+                                           encoding=encoding, newline=newline)
             else:
                 # _open = open
-                self.file_obj = io.open(self.temp_path, mode='wt', encoding=encoding)
+                self.file_obj = io.open(self.temp_path, mode='wt', encoding=encoding, newline=newline)
 
             # # open file and return writer
             if self.gz is None:
@@ -355,14 +356,14 @@ def load(input_glob, unique=True, verbose=True):
                 yield json_obj
 
 
-def dump(json_iterator, path, overwrite=True, unique=True):
+def dump(json_iterator, path, unique=True, overwrite=True):
     """
     like json.dump but writes many objects to a single output file
 
     :param json_iterator: iterator over json objects to be written
     :param path: output path
-    :param overwrite: overwrite existing file, if any
     :param unique: don't write duplicates
+    :param overwrite: overwrite existing file, if any
     :return: number of objects written
     """
     with DumpFile(path, mode='w' if overwrite else 'x', unique=unique) as f:
