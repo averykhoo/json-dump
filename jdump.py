@@ -111,16 +111,13 @@ class DumpReader:
         :return: num objects skipped
         """
         assert n > 0
-
         num_skipped = 0
-
         try:
             for _ in range(n):
                 next(self._reader)
                 num_skipped += 1
         except StopIteration:
             pass
-
         return num_skipped
 
 
@@ -132,7 +129,7 @@ class DumpWriter:
         :param separator:
         :param indent: see python's json docs
         """
-        self.separator_blob = f'\n{separator}\n'
+        self.separator_blob = f'\n{separator}\n'  # '\r\n' conversion handled by textIO's newline
         self.file_obj = f
         self.count = 0
         self.indent = indent
@@ -187,9 +184,9 @@ class DumpFile:
         :param newline: recommended that you stick with '\n' because java people hard code these things
         :param gz: force gzip or plaintext mode
         """
-        # verify mode
+        # verify mode is legit
         if mode not in 'rwax':
-            raise IOError(f'Mode "{mode}" not supported')
+            raise IOError(f'Mode not supported: {repr(mode)}')
         self.mode = mode
 
         # normalize path
@@ -332,6 +329,7 @@ def load(input_glob, unique=True, verbose=True):
     :param unique: yield only unique items
     :param verbose: print filenames being loaded
     """
+    # find files to read
     input_paths = sorted(glob.glob(os.path.abspath(input_glob), recursive=True))
     if not input_paths:
         warnings.warn(f'zero files found matching <{input_glob}>')
@@ -342,6 +340,7 @@ def load(input_glob, unique=True, verbose=True):
     else:
         seen = None
 
+    # read all files
     for i, path in enumerate(input_paths):
         if verbose:
             print(f'[{i + 1}/{len(input_paths)}] ({format_bytes(os.path.getsize(path))}) {path}')
