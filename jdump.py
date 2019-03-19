@@ -191,7 +191,6 @@ class DumpFile:
 
         # normalize path
         self.path = os.path.abspath(path)
-        self.temp_path = None
 
         # init file objects
         self.file_obj = None
@@ -237,9 +236,6 @@ class DumpFile:
                 assert not os.path.exists(os.path.dirname(self.path)), 'parent dir is not dir'
                 os.makedirs(os.path.dirname(self.path))
 
-            # prepare file to write to
-            self.temp_path = self.path + '.partial'
-
             # detect gzipped file
             if filename.lower().endswith('gz'):
                 self.gz = True
@@ -252,19 +248,19 @@ class DumpFile:
             if gz is None:
                 if self.gz:
                     # _open = gzip.open
-                    self.file_obj = io.open(self.temp_path, mode='wb')
+                    self.file_obj = io.open(self.path, mode=mode + 'b')
                     self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode='wb', fileobj=self.file_obj),
                                                encoding=encoding, newline=newline)
                 else:
-                    self.file_obj = io.open(self.temp_path, mode='wt', encoding=encoding, newline=newline)
+                    self.file_obj = io.open(self.path, mode=mode + 't', encoding=encoding, newline=newline)
             elif gz:
                 # _open = gzip.open
-                self.file_obj = io.open(self.temp_path, mode='wb')
-                self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode='wb', fileobj=self.file_obj),
+                self.file_obj = io.open(self.path, mode=mode + 'b')
+                self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode=mode + 'b', fileobj=self.file_obj),
                                            encoding=encoding, newline=newline)
             else:
                 # _open = open
-                self.file_obj = io.open(self.temp_path, mode='wt', encoding=encoding, newline=newline)
+                self.file_obj = io.open(self.path, mode=mode + 't', encoding=encoding, newline=newline)
 
             # # open file and return writer
             if self.gz is None:
@@ -284,16 +280,6 @@ class DumpFile:
             self.file_obj = None
         else:
             warnings.warn(f'File already closed: ({self.path})')
-
-        # finally rename the temp path
-        if self.temp_path is not None:
-            if os.path.exists(self.path):
-                if self.mode == 'x':
-                    # someone else created the file we want to exclusively create while we were doing stuff
-                    raise FileExistsError(f'File was created during writing: {self.path}')
-                os.remove(self.path)
-            os.rename(self.temp_path, self.path)
-            self.temp_path = None
 
     def __enter__(self):
         return self
@@ -358,6 +344,7 @@ def load(input_glob, unique=True, verbose=True):
 def dump(json_iterator, path, unique=True, overwrite=True):
     """
     like json.dump but writes many objects to a single output file
+    writes to a temp file before finally renaming the file at the end
 
     :param json_iterator: iterator over json objects to be written
     :param path: output path
@@ -365,8 +352,25 @@ def dump(json_iterator, path, unique=True, overwrite=True):
     :param overwrite: overwrite existing file, if any
     :return: number of objects written
     """
-    with DumpFile(path, mode='w' if overwrite else 'x', unique=unique) as f:
-        return f.writemany(json_iterator)
+
+    # if not overwrite then skip
+    if not overwrite and os.path.exists(path):
+        return 0
+
+    # use a temp file
+    temp_path = os.path.abspath(path) + '.partial'
+    with DumpFile(temp_path, mode='w' if overwrite else 'x', unique=unique) as f:
+        n_written = f.writemany(json_iterator)
+
+    # remove original file
+    if os.path.exists(path):
+        if not overwrite:
+            # someone else created the file we want to exclusively create while we were doing stuff
+            raise FileExistsError(f'File was created during writing: {path}')
+        os.remove(path)
+    os.rename(temp_path, path)
+
+    return n_written
 
 
 # be more like the gzip library
