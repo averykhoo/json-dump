@@ -4,6 +4,7 @@ import io
 import json
 import os
 import warnings
+from pathlib import Path, PurePath
 from typing import Union
 
 
@@ -53,7 +54,7 @@ def _reader(file_obj, separator):
 class DumpReader:
     def __init__(self, f, unique=True, separator='--'):
         """
-        :param f: file-like object (expects mode='rt')
+        :param f: file-like object in read-text mode
         :param unique: skip (do not yield) duplicate objects
         :param separator:
         """
@@ -124,7 +125,7 @@ class DumpReader:
 class DumpWriter:
     def __init__(self, f, unique=True, separator='--', indent=4):
         """
-        :param f: file-like object (expects mode='wt')
+        :param f: file-like object in write-text mode
         :param unique: skip (do not write) duplicate objects
         :param separator:
         :param indent: see python's json docs
@@ -173,96 +174,84 @@ class DumpWriter:
 class DumpFile:
     rw_obj: Union[DumpReader, DumpWriter]
 
-    def __init__(self, path, mode='r', unique=True, encoding='utf8', newline='\n', gz=None):
+    def __init__(self, path, mode='r', write_gz=False, unique=True, encoding='utf8', newline='\n'):
         """
         note that existing items are not accounted for uniqueness when appending
 
         :param path: string / pathlib.Path / pathlib.PurePath
         :param mode: (r)ead, (w)rite, (a)ppend, e(x)clusive creation
+        :param write_gz: use gzip compression; if a string, sets the filename for writing
         :param unique: only read/write unique objects
         :param encoding: strongly recommended that you stick with utf-8
         :param newline: recommended that you stick with '\n' because java people hard code these things
-        :param gz: force gzip or plaintext mode
         """
         # verify mode is legit
         if mode not in 'rwax':
             raise IOError(f'Mode not supported: {repr(mode)}')
-        self.mode = mode
 
         # normalize path
-        self.path = os.path.abspath(path)
+        self.path = Path(path).resolve()
 
         # init file objects
         self.file_obj = None
         self.gz = None
-        self.rw_obj = None
 
         # read/append mode (don't create new file)
         if mode in 'ra':
 
             # determine whether to use gzip
-            if gz is None:
-                with io.open(self.path, mode='rb') as f:
-                    b = f.read(2)
-                    if b == b'\x1f\x8b':
-                        _open = gzip.open
-                    else:
-                        _open = io.open
-
-            elif gz:
-                _open = gzip.open
-
-            else:
-                _open = io.open
+            with io.open(str(self.path), mode='rb') as f:
+                b = f.read(2)
+                if b == b'\x1f\x8b':
+                    _open = gzip.open
+                else:
+                    _open = io.open
 
             # create file obj and reader/writer
             if mode == 'r':
-                self.file_obj = _open(self.path, mode='rt', encoding=encoding)
+                self.file_obj = _open(str(self.path), mode='rt', encoding=encoding)
                 self.rw_obj = DumpReader(self.file_obj, unique=unique)
             else:
-                self.file_obj = _open(self.path, mode='at', encoding=encoding, newline=newline)
+                self.file_obj = _open(str(self.path), mode='at', encoding=encoding, newline=newline)
                 self.rw_obj = DumpWriter(self.file_obj, unique=unique)
 
         # write/create mode (create new file)
         else:
-            if mode == 'x' and os.path.exists(self.path):
+            # if overwrite is disabled
+            if mode == 'x' and self.path.exists():
                 raise FileExistsError(f'File already exists: {self.path}')
 
-            # normalize filename for gzip
-            filename = os.path.basename(self.path)
-
             # prepare dir to write to
-            if not os.path.isdir(os.path.dirname(self.path)):
-                assert not os.path.exists(os.path.dirname(self.path)), 'parent dir is not dir'
-                os.makedirs(os.path.dirname(self.path))
+            if not self.path.parent.is_dir():
+                assert not self.path.parent.exists(), 'parent dir is not dir'
+                self.path.parent.mkdir(parents=True, exist_ok=True)
 
-            # detect gzipped file
-            if filename.lower().endswith('gz'):
-                self.gz = True
+            # the GZIP flag is set
+            if write_gz:
+                # get the filename from flag if possible
+                if isinstance(write_gz, str) or isinstance(write_gz, PurePath):
+                    filename = os.path.basename(write_gz)  # maybe someone put in a full path
 
-            # correct the filename for a compressed file
-            if filename.lower().endswith('.gz'):
-                filename = filename[:-3]
-
-            # determine whether to use gzip
-            if gz is None:
-                if self.gz:
-                    # _open = gzip.open
-                    self.file_obj = io.open(self.path, mode=mode + 'b')
-                    self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode='wb', fileobj=self.file_obj),
-                                               encoding=encoding, newline=newline)
+                # otherwise get from self.path
                 else:
-                    self.file_obj = io.open(self.path, mode=mode + 't', encoding=encoding, newline=newline)
-            elif gz:
+                    filename = self.path.name
+                    if filename.lower().endswith('.partial'):
+                        filename = filename[:-8]
+                    if filename.lower().endswith('.gz'):
+                        filename = filename[:-3]
+
                 # _open = gzip.open
-                self.file_obj = io.open(self.path, mode=mode + 'b')
+                self.file_obj = io.open(str(self.path), mode=mode + 'b')
                 self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode=mode + 'b', fileobj=self.file_obj),
                                            encoding=encoding, newline=newline)
-            else:
-                # _open = open
-                self.file_obj = io.open(self.path, mode=mode + 't', encoding=encoding, newline=newline)
 
-            # # open file and return writer
+            # don't use gzip
+            else:
+                if self.path.name.endswith('gz'):
+                    warnings.warn(f'write_gz=False, but file path ends with "gz": {self.path}')
+                self.file_obj = io.open(str(self.path), mode=mode + 't', encoding=encoding, newline=newline)
+
+            # create writer
             if self.gz is None:
                 self.rw_obj = DumpWriter(self.file_obj, unique=unique)
             else:
@@ -331,7 +320,7 @@ def load(input_glob, unique=True, verbose=True):
         if verbose:
             print(f'[{i + 1}/{len(input_paths)}] ({format_bytes(os.path.getsize(path))}) {path}')
 
-        with DumpFile(path) as f:
+        with DumpFile(path, unique=False) as f:
             for json_obj in f:
                 if seen is not None:
                     json_hash = hash(json.dumps(json_obj, sort_keys=True, ensure_ascii=False, allow_nan=False))
@@ -341,15 +330,15 @@ def load(input_glob, unique=True, verbose=True):
                 yield json_obj
 
 
-def dump(json_iterator, path, unique=True, overwrite=True):
+def dump(json_iterator, path, overwrite=True, unique=True):
     """
     like json.dump but writes many objects to a single output file
     writes to a temp file before finally renaming the file at the end
 
     :param json_iterator: iterator over json objects to be written
     :param path: output path
-    :param unique: don't write duplicates
     :param overwrite: overwrite existing file, if any
+    :param unique: don't write duplicates
     :return: number of objects written
     """
 
@@ -357,9 +346,18 @@ def dump(json_iterator, path, unique=True, overwrite=True):
     if not overwrite and os.path.exists(path):
         return 0
 
+    # set filename
+    filename = os.path.basename(path)
+    if filename.lower().endswith('.gz'):
+        filename = filename[:-3]
+    elif filename.lower().endswith('gz'):
+        warnings.warn(f'GZIP is enabled but internal filename is: {filename}')
+    else:
+        filename = False
+
     # use a temp file
     temp_path = os.path.abspath(path) + '.partial'
-    with DumpFile(temp_path, mode='w' if overwrite else 'x', unique=unique) as f:
+    with DumpFile(temp_path, mode='w', write_gz=filename, unique=unique) as f:
         n_written = f.writemany(json_iterator)
 
     # remove original file

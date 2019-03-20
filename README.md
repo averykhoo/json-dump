@@ -1,12 +1,40 @@
 #   JSON dump
-
-The original page for this project is `https://github.com/averykhoo/json_dump`
-
-NOTE: Default behavior is to drop duplicates when reading/writing, set `unique=False` to read/write all objects
-
+-   The original page for this project is `https://github.com/averykhoo/json_dump`
+-   NOTE: Default behavior is to drop duplicates when reading/writing, set `unique=False` to read/write all objects
 
 
 ##  Usage
+
+### Read everything from a file or from multiple files matching some glob pattern
+```python
+from pprint import pprint
+import jdump
+
+# mimics `json.load` but is an iterator yielding json objects
+for json_obj in jdump.load('some/glob/path/**/filename.*'):
+    pprint(json_obj)
+```
+
+### Write multiple objects to a text file
+```python
+import jdump
+
+json_objs = [{'example': n} for n in range(100)]
+
+jdump.dump(json_objs, 'path/to/file.txt')
+```
+
+### Write multiple objects to a *gzipped* text file
+```python
+import jdump
+
+json_objs = [{'example': n} for n in range(100)]
+
+jdump.dump(json_objs, 'path/to/file.txt.gz')  # just append ".gz" to the path
+```
+
+
+## Advanced Usage
 
 ### Open a file to read/write/append/create
 -   Usage of `jdump.open` is similar to `io.open` or `gzip.open`
@@ -34,17 +62,6 @@ with jdump.open('path/to/file.txt', mode='w') as f:
 ```
 
 
-### Read everything from multiple files matching some glob pattern
-```python
-from pprint import pprint
-import jdump
-
-# mimics `json.load` but is an iterator yielding json objects
-for json_obj in jdump.load('some/glob/path/**/filename.*'):
-    pprint(json_obj)
-```
-
-
 ### To write a *gzipped* dumpfile
 -   Just append `.gz` to the filename
 -   Gzip compression is auto-detected when reading/appending
@@ -62,6 +79,9 @@ import jdump
 
 json_objs = [{'example': n} for n in range(100)]
 
+# RECOMMENDED
+jdump.dump(json_objs, 'path/to/file.txt')
+
 # using open and `write`
 with jdump.open('path/to/file.txt.gz', mode='w') as f:
     for json_obj in json_objs:
@@ -70,9 +90,6 @@ with jdump.open('path/to/file.txt.gz', mode='w') as f:
 # using open and `writemany`
 with jdump.open('path/to/file.txt.gz', mode='w') as f:
     f.writemany(json_objs)  # returns number of objects written
-    
-# use `jdump.dump` which takes an iterator and a path (unlike `json.dump` which takes a file object)
-jdump.dump(json_objs, 'path/to/file.txt')
 ```
 
 
