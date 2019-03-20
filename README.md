@@ -5,75 +5,65 @@
 
 ##  Usage
 
-### Read everything from a file or from multiple files matching some glob pattern
+### Read everything from a file (or from multiple files matching some glob pattern)
 ```python
 from pprint import pprint
 import jdump
 
 # mimics `json.load` but is an iterator yielding json objects
-for json_obj in jdump.load('some/glob/path/**/filename.*'):
+for json_obj in jdump.load('some/glob/path/**/filename.*'):  # also accepts Path objects
     pprint(json_obj)
 ```
 
-### Write multiple objects to a text file
+### Write multiple objects to a file
 ```python
 import jdump
 
 json_objs = [{'example': n} for n in range(100)]
 
-jdump.dump(json_objs, 'path/to/file.txt')
-```
+# write to a plaintext file
+jdump.dump(json_objs, 'path/to/file.txt')  # also accepts Path objects
 
-### Write multiple objects to a *gzipped* text file
-```python
-import jdump
-
-json_objs = [{'example': n} for n in range(100)]
-
-jdump.dump(json_objs, 'path/to/file.txt.gz')  # just append ".gz" to the path
+# to write a gzip-compressed text file, just append ".gz" to the path
+jdump.dump(json_objs, 'path/to/file.txt.gz')
 ```
 
 
 ## Advanced Usage
 
-### Open a file to read/write/append/create
+### Open a file (read/write/append/create)
 -   Usage of `jdump.open` is similar to `io.open` or `gzip.open`
 -   Valid modes are `r`, `w`, `a`, and `x`
+-   To compress, set `write_gz` to your preferred filename (or to `True` if you want to be lazy)
+-   Gzip compression is auto-detected when reading/appending
 ```python
 from pprint import pprint
 import jdump
 
-# read an existing (possibly gzipped) file
+# read an existing file (gzip is auto-detected)
 with jdump.open('path/to/file.txt', mode='r') as f:
     for json_obj in f:
         pprint(json_obj)
-        
-# append to an existing file
-with jdump.open('path/to/file.txt', mode='a') as f:
-    f.write({'example': ['object']})
 
 # write to a file (create or overwrite)
 with jdump.open('path/to/file.txt', mode='w') as f:
     f.write({'example': ['object']})
 
-# write to a file (overwrite only)
-with jdump.open('path/to/file.txt', mode='w') as f:
+# write to a gzipped file
+with jdump.open('path/to/file.txt.gz', mode='w', write_gz='file.txt') as f:
+    f.write({'example': ['object']})
+
+# append to an existing file (gzip is auto-detected)
+with jdump.open('path/to/file.txt', mode='a') as f:
+    f.write({'example': ['object']})
+
+# write to a new file (exclusive creation)
+with jdump.open('path/to/file.txt.gz', mode='x', write_gz='file.txt') as f:
     f.write({'example': ['object']})
 ```
 
 
-### To write a *gzipped* dumpfile
--   Just append `.gz` to the filename
--   Gzip compression is auto-detected when reading/appending
-```python
-import jdump
-
-with jdump.open('path/to/file.txt.gz', mode='w') as f:
-    f.write({'example': ['object']})
-```
-
-
-### Write multiple objects to a file
+### Write multiple objects to a file using `writemany`
 ```python
 import jdump
 
@@ -82,18 +72,19 @@ json_objs = [{'example': n} for n in range(100)]
 # RECOMMENDED
 jdump.dump(json_objs, 'path/to/file.txt')
 
-# using open and `write`
-with jdump.open('path/to/file.txt.gz', mode='w') as f:
-    for json_obj in json_objs:
-        f.write(json_obj)  # returns True
-        
 # using open and `writemany`
-with jdump.open('path/to/file.txt.gz', mode='w') as f:
-    f.writemany(json_objs)  # returns number of objects written
+with jdump.open('path/to/file.txt.gz', mode='w', write_gz='file.txt') as f:
+    n_written = f.writemany(json_objs)  # returns number of objects written
+
+# equivalent to the following
+with jdump.open('path/to/file.txt.gz', mode='w', write_gz='file.txt') as f:
+    n_written = 0
+    for json_obj in json_objs:
+        n_written += f.write(json_obj)  # returns True if written
 ```
 
 
-### Reading/writing on already opened file objects
+### Reading/writing on already-opened file objects
 -   Usage of `jdump.reader` and `jdump.writer` is similar to `csv.reader` and `csv.writer`
 ```python
 import gzip
@@ -113,11 +104,21 @@ with open('some_file.txt', 'wt', encoding='utf8') as f:
 ```
 
 
-### Misc functions
--   `DumpFile.count()` <-- how many items have been read/written since the file was opened
--   `DumpFile.skip()` <-- skip reading an object (and exclude from read count)
+### Other `DumpFile` methods that aren't as useful
+-   `DumpFile.get_count()` <-- how many items have been read/written since the file was opened
+-   `DumpFile.skip()` <-- skip reading an object (which will be excluded from the read count)
 
 
+## Misc
 
-##  Why `--`
+###  Why `--` as a separator?
 -   As far as I can tell, this is very unlikely to exist in valid JSON
+
+###  Why force `\n` as the newline ending?
+-   Because *some* people assume unix-style line endings and hard code these things
+
+###  Why does `jdump.dump` use a temp file?
+-   So that dumps are transactional: either all objects are dumped, or the path isn't (over)written
+
+###  Why is the UNIQUE flag on by default?
+-   I personally don't need duplicate objects in my files

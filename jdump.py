@@ -183,7 +183,7 @@ class DumpFile:
         :param write_gz: use gzip compression; if a string, sets the filename for writing
         :param unique: only read/write unique objects
         :param encoding: strongly recommended that you stick with utf-8
-        :param newline: recommended that you stick with '\n' because java people hard code these things
+        :param newline: recommended that you stick with '\n'
         """
         # verify mode is legit
         if mode not in 'rwax':
@@ -291,7 +291,7 @@ class DumpFile:
     def __iter__(self):
         return iter(self.rw_obj)
 
-    def count(self):
+    def get_count(self):
         return self.rw_obj.count
 
 
@@ -320,7 +320,7 @@ def load(input_glob, unique=True, verbose=True):
         if verbose:
             print(f'[{i + 1}/{len(input_paths)}] ({format_bytes(os.path.getsize(path))}) {path}')
 
-        with DumpFile(path, unique=False) as f:
+        with DumpFile(path, mode='r', unique=False) as f:
             for json_obj in f:
                 if seen is not None:
                     json_hash = hash(json.dumps(json_obj, sort_keys=True, ensure_ascii=False, allow_nan=False))
