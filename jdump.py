@@ -300,12 +300,12 @@ def load(input_glob, unique=True, verbose=True):
     yields json objects from multiple files matching some glob pattern
     auto-detects gzip compression for each file
 
-    :param input_glob: pattern to match
+    :param input_glob: recursive pattern to match
     :param unique: yield only unique items
     :param verbose: print filenames being loaded
     """
     # find files to read
-    input_paths = sorted(glob.glob(os.path.abspath(input_glob), recursive=True))
+    input_paths = sorted(filter(os.path.isfile, glob.glob(os.path.abspath(input_glob), recursive=True)))
     if not input_paths:
         warnings.warn(f'zero files found matching <{input_glob}>')
 
