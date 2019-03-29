@@ -106,8 +106,8 @@ with open('some_file.txt', 'wt', encoding='utf8') as f:
 
 ### Other `DumpFile` methods that aren't as useful
 -   `DumpFile.get_count()` <-- how many items have been read/written since the file was opened
--   `DumpFile.skip()` <-- skip reading an object (which will be excluded from the read count)
--   `len(path)` *or* `get_count(path)` <-- count number of objects in the path
+-   `DumpFile.skip(n)` <-- skip reading an object (which will be excluded from the read count)
+-   `get_count(path)` <-- count number of objects in the path
 
 
 ## Misc
