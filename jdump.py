@@ -108,17 +108,25 @@ class DumpReader:
         skip up to n items from the file
         does not count towards unique objects returned
 
-        :param n: how many items to skip
+        :param n: how many items to skip (skip all if n<0)
         :return: num objects skipped
         """
-        assert n > 0
         num_skipped = 0
-        try:
-            for _ in range(n):
-                next(self._reader)
+
+        # skip a specific number of objects
+        if n >= 0:
+            try:
+                for _ in range(n):
+                    next(self._reader)
+                    num_skipped += 1
+            except StopIteration:
+                pass
+
+        # skip all remaining objects
+        else:
+            for _ in self._reader:
                 num_skipped += 1
-        except StopIteration:
-            pass
+
         return num_skipped
 
 
@@ -199,6 +207,10 @@ class DumpFile:
         # read/append mode (don't create new file)
         if mode in 'ra':
 
+            # warn that WRITE_GZIP flag is ignored
+            if write_gz:
+                warnings.warn(f'the WRITE_GZIP flag is ignored in {repr(mode)} mode')
+
             # determine whether to use gzip
             with io.open(str(self.path), mode='rb') as f:
                 b = f.read(2)
@@ -226,7 +238,7 @@ class DumpFile:
                 assert not self.path.parent.exists(), 'parent dir is not dir'
                 self.path.parent.mkdir(parents=True, exist_ok=True)
 
-            # the GZIP flag is set
+            # the WRITE_GZIP flag is set
             if write_gz:
                 # get the filename from flag if possible
                 if isinstance(write_gz, str) or isinstance(write_gz, PurePath):
@@ -247,8 +259,11 @@ class DumpFile:
 
             # don't use gzip
             else:
+                # save my future self from forgetting the WRITE_GZIP flag
                 if self.path.name.endswith('gz'):
                     warnings.warn(f'write_gz=False, but file path ends with "gz": {self.path}')
+
+                # open text mode file
                 self.file_obj = io.open(str(self.path), mode=mode + 't', encoding=encoding, newline=newline)
 
             # create writer
@@ -371,6 +386,17 @@ def dump(json_iterator, path, overwrite=True, unique=True):
     return n_written
 
 
+def get_count(path):
+    """
+    count number of items in a dump file
+
+    :param path: file to read
+    :return: number of items (integer)
+    """
+    with DumpFile(path, mode='r') as f:
+        return f.skip(-1)
+
+
 # be more like the gzip library
 # noinspection PyShadowingBuiltins
 open = DumpFile
@@ -378,3 +404,7 @@ open = DumpFile
 # be more like the csv library
 reader = DumpReader
 writer = DumpWriter
+
+# because `len` is easier to remember
+# noinspection PyShadowingBuiltins
+len = get_count
