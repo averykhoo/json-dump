@@ -386,15 +386,21 @@ def dump(json_iterator, path, overwrite=True, unique=True):
     return n_written
 
 
-def get_count(path):
+def get_count(path, unique=False):
     """
     count number of items in a dump file
 
     :param path: file to read
     :return: number of items (integer)
     """
-    with DumpFile(path, mode='r') as f:
-        return f.skip(-1)
+    if unique:
+        with DumpFile(path, mode='r', unique=True) as f:
+            for _ in f:
+                pass
+            return f.get_count()
+    else:
+        with DumpFile(path, mode='r', unique=False) as f:
+            return f.skip(-1)
 
 
 # be more like the gzip library
@@ -404,7 +410,3 @@ open = DumpFile
 # be more like the csv library
 reader = DumpReader
 writer = DumpWriter
-
-# because `len` is easier to remember
-# noinspection PyShadowingBuiltins
-len = get_count
