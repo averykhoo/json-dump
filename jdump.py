@@ -309,6 +309,11 @@ class DumpFile:
     def get_count(self):
         return self.rw_obj.count
 
+    def flush(self):
+        if self.gz is not None:
+            self.gz.flush()
+        self.file_obj.flush()
+
 
 def load(input_glob, unique=True, verbose=True):
     """
