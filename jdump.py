@@ -4,7 +4,7 @@ import io
 import json
 import os
 import warnings
-from pathlib import Path, PurePath
+from pathlib import Path
 from typing import Union
 
 
@@ -241,7 +241,7 @@ class DumpFile:
             # the WRITE_GZIP flag is set
             if write_gz:
                 # get the filename from flag if possible
-                if isinstance(write_gz, str) or isinstance(write_gz, PurePath):
+                if isinstance(write_gz, str) or isinstance(write_gz, os.PathLike):
                     filename = os.path.basename(write_gz)  # maybe someone put in a full path
 
                 # otherwise get from self.path
@@ -254,6 +254,8 @@ class DumpFile:
 
                 # _open = gzip.open
                 self.file_obj = io.open(str(self.path), mode=mode + 'b')
+
+                # noinspection PyTypeChecker
                 self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode=mode + 'b', fileobj=self.file_obj),
                                            encoding=encoding, newline=newline)
 
@@ -396,7 +398,8 @@ def get_count(path, unique=False):
     count number of items in a dump file
 
     :param path: file to read
-    :return: number of items (integer)
+    :param unique: count only unique items (slower)
+    :return: number of items as a non-negative integer
     """
     if unique:
         with DumpFile(path, mode='r', unique=True) as f:
