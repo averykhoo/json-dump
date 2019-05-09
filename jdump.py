@@ -317,19 +317,19 @@ class DumpFile:
         self.file_obj.flush()
 
 
-def load(input_glob, unique=True, verbose=True):
+def load(glob_path, unique=True, verbose=True):
     """
     yields json objects from multiple files matching some glob pattern
     auto-detects gzip compression for each file
 
-    :param input_glob: recursive pattern to match
+    :param glob_path: recursive pattern to match
     :param unique: yield only unique items
     :param verbose: print filenames being loaded
     """
     # find files to read
-    input_paths = sorted(filter(os.path.isfile, glob.glob(os.path.abspath(input_glob), recursive=True)))
+    input_paths = sorted(filter(os.path.isfile, glob.glob(os.path.abspath(glob_path), recursive=True)))
     if not input_paths:
-        warnings.warn(f'zero files found matching <{input_glob}>')
+        warnings.warn(f'zero files found matching <{glob_path}>')
 
     # re-implement unique to remove duplicates from multiple files
     if unique:
@@ -393,22 +393,22 @@ def dump(json_iterator, path, overwrite=True, unique=True):
     return n_written
 
 
-def get_count(path, unique=False):
+def get_count(glob_path):
     """
     count number of items in a dump file
 
-    :param path: file to read
-    :param unique: count only unique items (slower)
+    :param glob_path: files to read
     :return: number of items as a non-negative integer
     """
-    if unique:
-        with DumpFile(path, mode='r', unique=True) as f:
-            for _ in f:
-                pass
-            return f.get_count()
-    else:
+
+    input_paths = sorted(filter(os.path.isfile, glob.glob(os.path.abspath(glob_path), recursive=True)))
+    if not input_paths:
+        warnings.warn(f'zero files found matching <{glob_path}>')
+
+    count = 0
+    for path in input_paths:
         with DumpFile(path, mode='r', unique=False) as f:
-            return f.skip(-1)
+            count += f.skip(-1)
 
 
 # be more like the gzip library
