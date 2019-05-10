@@ -405,7 +405,7 @@ def get_count(glob_paths):
     """
     count number of items in a dump file
 
-    :param glob_path: files to read
+    :param glob_paths: files to read
     :return: number of items as a non-negative integer
     """
     if isinstance(glob_paths, str) or isinstance(glob_paths, os.PathLike):
