@@ -317,19 +317,27 @@ class DumpFile:
         self.file_obj.flush()
 
 
-def load(glob_path, unique=True, verbose=True):
+def load(glob_paths, unique=True, verbose=True):
     """
     yields json objects from multiple files matching some glob pattern
     auto-detects gzip compression for each file
 
-    :param glob_path: recursive pattern to match
+    :param glob_paths: recursive pattern to match
     :param unique: yield only unique items
     :param verbose: print filenames being loaded
     """
+    if isinstance(glob_paths, str) or isinstance(glob_paths, os.PathLike):
+        glob_paths = [glob_paths]
+
     # find files to read
-    input_paths = sorted(filter(os.path.isfile, glob.glob(os.path.abspath(glob_path), recursive=True)))
+    input_paths = set()
+    for glob_path in glob_paths:
+        input_paths.update(glob.glob(os.path.abspath(glob_path), recursive=True))
+    input_paths = sorted(filter(os.path.isfile, input_paths))
+
+    # no files to read
     if not input_paths:
-        warnings.warn(f'zero files found matching <{glob_path}>')
+        warnings.warn(f'zero files found matching {glob_paths}')
 
     # re-implement unique to remove duplicates from multiple files
     if unique:
@@ -393,17 +401,25 @@ def dump(json_iterator, path, overwrite=True, unique=True):
     return n_written
 
 
-def get_count(glob_path):
+def get_count(glob_paths):
     """
     count number of items in a dump file
 
     :param glob_path: files to read
     :return: number of items as a non-negative integer
     """
+    if isinstance(glob_paths, str) or isinstance(glob_paths, os.PathLike):
+        glob_paths = [glob_paths]
 
-    input_paths = sorted(filter(os.path.isfile, glob.glob(os.path.abspath(glob_path), recursive=True)))
+    # find files to read
+    input_paths = set()
+    for glob_path in glob_paths:
+        input_paths.update(glob.glob(os.path.abspath(glob_path), recursive=True))
+    input_paths = sorted(filter(os.path.isfile, input_paths))
+
+    # no files to read
     if not input_paths:
-        warnings.warn(f'zero files found matching <{glob_path}>')
+        warnings.warn(f'zero files found matching {glob_paths}')
 
     count = 0
     for path in input_paths:
