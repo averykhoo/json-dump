@@ -420,7 +420,9 @@ def get_count(glob_paths):
     # no files to read
     if not input_paths:
         warnings.warn(f'zero files found matching {glob_paths}')
+        return 0
 
+    # sum count over all files
     count = 0
     for path in input_paths:
         with DumpFile(path, mode='r', unique=False) as f:
