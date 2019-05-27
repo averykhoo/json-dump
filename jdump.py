@@ -426,6 +426,8 @@ def get_count(glob_paths):
         with DumpFile(path, mode='r', unique=False) as f:
             count += f.skip(-1)
 
+    return count
+
 
 # be more like the gzip library
 # noinspection PyShadowingBuiltins
