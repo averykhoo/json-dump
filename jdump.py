@@ -519,6 +519,3 @@ open = DumpFile
 # be more like the csv library
 reader = DumpReader
 writer = DumpWriter
-
-if __name__ == '__main__':
-    dump([1, 2, 3, {1: 2}, "sdf", {1: {1: {1: 2}, 2: {1: 2}}}], ['a.txt', 'b.txt.gz', Path('d/c.txt')])
