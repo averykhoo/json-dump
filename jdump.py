@@ -366,7 +366,7 @@ def dump(json_iterator, paths, overwrite=True, unique=True):
     writes to a temp file before finally renaming the file at the end
 
     :param json_iterator: iterator over json objects to be written
-    :param paths: output path(s)
+    :param paths: output path, or list of paths
     :param overwrite: overwrite existing file, if any
     :param unique: don't write duplicates
     :return: number of objects written
