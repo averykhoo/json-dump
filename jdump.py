@@ -360,44 +360,125 @@ def load(glob_paths, unique=True, verbose=True):
                 yield json_obj
 
 
-def dump(json_iterator, path, overwrite=True, unique=True):
+# def dump(json_iterator, path, overwrite=True, unique=True):
+#     """
+#     like json.dump but writes many objects to a single output file
+#     writes to a temp file before finally renaming the file at the end
+#
+#     :param json_iterator: iterator over json objects to be written
+#     :param path: output path
+#     :param overwrite: overwrite existing file, if any
+#     :param unique: don't write duplicates
+#     :return: number of objects written
+#     """
+#
+#     # if not overwrite then skip
+#     if not overwrite and os.path.exists(path):
+#         return 0
+#
+#     # set filename
+#     filename = os.path.basename(path)
+#     if filename.lower().endswith('.gz'):
+#         filename = filename[:-3]
+#     elif filename.lower().endswith('gz'):
+#         warnings.warn(f'GZIP is enabled but internal filename is: {filename}')
+#     else:
+#         filename = False
+#
+#     # use a temp file
+#     temp_path = os.path.abspath(path) + '.partial'
+#     with DumpFile(temp_path, mode='w', write_gz=filename, unique=unique) as f:
+#         n_written = f.writemany(json_iterator)
+#
+#     # remove original file
+#     if os.path.exists(path):
+#         if not overwrite:
+#             # someone else created the file we want to exclusively create while we were doing stuff
+#             raise FileExistsError(f'File was created during writing: {path}')
+#         os.remove(path)
+#     os.rename(temp_path, path)
+#
+#     return n_written
+
+
+def dump(json_iterator, paths, overwrite=True, unique=True):
     """
     like json.dump but writes many objects to a single output file
     writes to a temp file before finally renaming the file at the end
 
     :param json_iterator: iterator over json objects to be written
-    :param path: output path
+    :param paths: output path(s)
     :param overwrite: overwrite existing file, if any
     :param unique: don't write duplicates
     :return: number of objects written
     """
+    # convert to list if it's a single path
+    if isinstance(paths, str) or isinstance(paths, os.PathLike):
+        paths = [paths]
+    paths = [os.path.abspath(path) for path in paths]
+
+    # no output paths
+    if not len(paths):
+        warnings.warn('zero output paths specified')
+        return 0
 
     # if not overwrite then skip
-    if not overwrite and os.path.exists(path):
+    if not overwrite and any(os.path.exists(path) for path in paths):
         return 0
 
     # set filename
-    filename = os.path.basename(path)
-    if filename.lower().endswith('.gz'):
-        filename = filename[:-3]
-    elif filename.lower().endswith('gz'):
-        warnings.warn(f'GZIP is enabled but internal filename is: {filename}')
-    else:
-        filename = False
+    filenames = []
+    for path in paths:
+        filename = os.path.basename(path)
+        if filename.lower().endswith('.gz'):
+            filename = filename[:-3]
+        elif filename.lower().endswith('gz'):
+            warnings.warn(f'GZIP is enabled but internal filename is: {filename}')
+        else:
+            filename = False
+        filenames.append(filename)
 
     # use a temp file
-    temp_path = os.path.abspath(path) + '.partial'
-    with DumpFile(temp_path, mode='w', write_gz=filename, unique=unique) as f:
-        n_written = f.writemany(json_iterator)
+    temp_paths = []
+    for path in paths:
+        temp_path = os.path.abspath(path) + '.partial'
+        temp_paths.append(temp_path)
+
+    # make output files
+    files = []
+    for temp_path, filename in zip(temp_paths, filenames):
+        f = DumpFile(temp_path, mode='w', write_gz=filename, unique=unique)
+        files.append(f)
+
+    # write items
+    if len(files) == 1:
+        files[0].writemany(json_iterator)
+    else:
+        for json_obj in json_iterator:
+            for f in files:
+                f.write(json_obj)
+
+    # close files
+    n_written = None
+    for f in files:
+        if n_written is None:
+            n_written = f.get_count()
+        else:
+            assert n_written == f.get_count()
+        f.close()
 
     # remove original file
-    if os.path.exists(path):
-        if not overwrite:
-            # someone else created the file we want to exclusively create while we were doing stuff
-            raise FileExistsError(f'File was created during writing: {path}')
-        os.remove(path)
-    os.rename(temp_path, path)
+    must_not_overwrite = []
+    for path, temp_path in zip(paths, temp_paths):
+        if os.path.exists(path):
+            if not overwrite:
+                # someone else created the file we want to exclusively create while we were doing stuff
+                must_not_overwrite.append(path)
+            os.remove(path)
+        os.rename(temp_path, path)
 
+    if must_not_overwrite:
+        raise FileExistsError(f'Files were created during writing: {must_not_overwrite}')
     return n_written
 
 
@@ -438,3 +519,6 @@ open = DumpFile
 # be more like the csv library
 reader = DumpReader
 writer = DumpWriter
+
+if __name__ == '__main__':
+    dump([1, 2, 3, {1: 2}, "sdf", {1: {1: {1: 2}, 2: {1: 2}}}], ['a.txt', 'b.txt.gz', Path('d/c.txt')])
