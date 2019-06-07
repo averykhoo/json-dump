@@ -360,47 +360,6 @@ def load(glob_paths, unique=True, verbose=True):
                 yield json_obj
 
 
-# def dump(json_iterator, path, overwrite=True, unique=True):
-#     """
-#     like json.dump but writes many objects to a single output file
-#     writes to a temp file before finally renaming the file at the end
-#
-#     :param json_iterator: iterator over json objects to be written
-#     :param path: output path
-#     :param overwrite: overwrite existing file, if any
-#     :param unique: don't write duplicates
-#     :return: number of objects written
-#     """
-#
-#     # if not overwrite then skip
-#     if not overwrite and os.path.exists(path):
-#         return 0
-#
-#     # set filename
-#     filename = os.path.basename(path)
-#     if filename.lower().endswith('.gz'):
-#         filename = filename[:-3]
-#     elif filename.lower().endswith('gz'):
-#         warnings.warn(f'GZIP is enabled but internal filename is: {filename}')
-#     else:
-#         filename = False
-#
-#     # use a temp file
-#     temp_path = os.path.abspath(path) + '.partial'
-#     with DumpFile(temp_path, mode='w', write_gz=filename, unique=unique) as f:
-#         n_written = f.writemany(json_iterator)
-#
-#     # remove original file
-#     if os.path.exists(path):
-#         if not overwrite:
-#             # someone else created the file we want to exclusively create while we were doing stuff
-#             raise FileExistsError(f'File was created during writing: {path}')
-#         os.remove(path)
-#     os.rename(temp_path, path)
-#
-#     return n_written
-
-
 def dump(json_iterator, paths, overwrite=True, unique=True):
     """
     like json.dump but writes many objects to a single output file
@@ -478,7 +437,7 @@ def dump(json_iterator, paths, overwrite=True, unique=True):
         os.rename(temp_path, path)
 
     if must_not_overwrite:
-        raise FileExistsError(f'Files were created during writing: {must_not_overwrite}')
+        raise FileExistsError(f'File(s) were created during writing: {must_not_overwrite}')
     return n_written
 
 
