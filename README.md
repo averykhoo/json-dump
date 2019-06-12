@@ -5,7 +5,7 @@
 
 ##  Usage
 
-### Read everything from a file (or from multiple files matching some glob pattern)
+### Read everything from a single filepath (or from multiple files matching a single glob pattern)
 ```python
 from pprint import pprint
 import jdump
@@ -15,7 +15,20 @@ for json_obj in jdump.load('some/glob/path/**/filename.*'):  # also accepts Path
     pprint(json_obj)
 ```
 
-### Write multiple objects to a file
+### Read everything from multiple filepaths or glob patterns
+```python
+from pathlib import Path
+from pprint import pprint
+import jdump
+
+# mimics `json.load` but is an iterator yielding json objects
+for json_obj in jdump.load(['some/glob/path/**/filename.*', 
+                            'some/other/path/filename2.txt', 
+                            Path('yet/another/path/filename3.txt.gz')]):
+    pprint(json_obj)
+```
+
+### Write objects to a single filepath
 ```python
 import jdump
 
@@ -26,6 +39,18 @@ jdump.dump(json_objs, 'path/to/file.txt')  # also accepts Path objects
 
 # to write a gzip-compressed text file, just append ".gz" to the path
 jdump.dump(json_objs, 'path/to/file.txt.gz')
+```
+
+### Write objects to multiple filepaths
+```python
+from pathlib import Path
+import jdump
+
+json_objs = [{'example': n} for n in range(100)]
+
+jdump.dump(json_objs, ['path/to/file.txt', 
+                       'path/to/another_file.txt.gz',
+                       Path('yet/another/file.txt.gz')])
 ```
 
 
@@ -75,6 +100,7 @@ jdump.dump(json_objs, 'path/to/file.txt')
 # using open and `writemany`
 with jdump.open('path/to/file.txt.gz', mode='w', write_gz='file.txt') as f:
     n_written = f.writemany(json_objs)  # returns number of objects written
+print(f'wrote {n_written} objects')
 
 # equivalent to the following
 with jdump.open('path/to/file.txt.gz', mode='w', write_gz='file.txt') as f:
@@ -104,7 +130,8 @@ with open('some_file.txt', 'wt', encoding='utf8') as f:
 ```
 
 
-### Other `DumpFile` methods that aren't as useful
+### Other `DumpFile` methods/attributes
+-   `DumpFile.path` <-- path of the file (as a `pathlib.Path` object)
 -   `DumpFile.get_count()` <-- how many items have been read/written since the file was opened
 -   `DumpFile.skip(n)` <-- skip reading an object (which will be excluded from the read count)
 -   `DumpFile.flush()` <-- does what you'd expect it to do
@@ -119,8 +146,8 @@ with open('some_file.txt', 'wt', encoding='utf8') as f:
 ###  Why force `\n` as the newline ending?
 -   Because *some* people assume unix-style line endings and hard code these things
 
-###  Why does `jdump.dump` use a temp file?
+###  Why does `jdump.dump` use temp files?
 -   So that dumps are transactional: either all objects are dumped, or the path isn't (over)written
 
 ###  Why is the UNIQUE flag on by default?
--   I personally don't need duplicate objects in my files
+-   I personally don't need duplicate objects returned when reading my files
