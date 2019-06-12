@@ -102,11 +102,11 @@ with jdump.open('path/to/file.txt.gz', mode='w', write_gz='file.txt') as f:
     n_written = f.writemany(json_objs)  # returns number of objects written
 print(f'wrote {n_written} objects')
 
-# equivalent to the following
+# equivalent to the following snippet using `write`
 with jdump.open('path/to/file.txt.gz', mode='w', write_gz='file.txt') as f:
     n_written = 0
     for json_obj in json_objs:
-        n_written += f.write(json_obj)  # returns True if written
+        n_written += f.write(json_obj)  # returns True if object is written
 ```
 
 
@@ -135,7 +135,10 @@ with open('some_file.txt', 'wt', encoding='utf8') as f:
 -   `DumpFile.get_count()` <-- how many items have been read/written since the file was opened
 -   `DumpFile.skip(n)` <-- skip reading an object (which will be excluded from the read count)
 -   `DumpFile.flush()` <-- does what you'd expect it to do
--   `get_count(path)` <-- count number of objects in the path
+
+
+### Other `jdump` methods
+-   `jdump.get_count` <-- counts number of (non-unique) objects in a file (or multiple paths/pathlib.Paths/globs)
 
 
 ## Misc
