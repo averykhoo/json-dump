@@ -27,6 +27,16 @@ def format_bytes(num):
     return ('%.2f %s' if num % 1 else '%d %s') % (num, unit)
 
 
+def resolve_glob(glob_patterns):
+    if isinstance(glob_patterns, (str, os.PathLike)):
+        glob_patterns = [glob_patterns]
+
+    paths = set()
+    for glob_pattern in glob_patterns:
+        paths.update(glob.glob(os.path.abspath(glob_pattern), recursive=True))
+    return sorted(paths)
+
+
 def _reader(file_obj, separator):
     """
     don't call this from outside the class pls
@@ -326,14 +336,9 @@ def load(glob_paths, unique=True, verbose=True):
     :param unique: yield only unique items
     :param verbose: print filenames being loaded
     """
-    if isinstance(glob_paths, str) or isinstance(glob_paths, os.PathLike):
-        glob_paths = [glob_paths]
 
     # find files to read
-    input_paths = set()
-    for glob_path in glob_paths:
-        input_paths.update(glob.glob(os.path.abspath(glob_path), recursive=True))
-    input_paths = sorted(filter(os.path.isfile, input_paths))
+    input_paths = [path for path in resolve_glob(glob_paths) if os.path.isfile(path)]
 
     # no files to read
     if not input_paths:
@@ -448,14 +453,9 @@ def get_count(glob_paths):
     :param glob_paths: files to read
     :return: number of items as a non-negative integer
     """
-    if isinstance(glob_paths, str) or isinstance(glob_paths, os.PathLike):
-        glob_paths = [glob_paths]
 
     # find files to read
-    input_paths = set()
-    for glob_path in glob_paths:
-        input_paths.update(glob.glob(os.path.abspath(glob_path), recursive=True))
-    input_paths = sorted(filter(os.path.isfile, input_paths))
+    input_paths = [path for path in resolve_glob(glob_paths) if os.path.isfile(path)]
 
     # no files to read
     if not input_paths:
