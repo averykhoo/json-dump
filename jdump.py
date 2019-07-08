@@ -318,6 +318,8 @@ class DumpFile:
 
         # rename from temp path
         if self.temp_path is not None:
+            # todo: check if mode was 'x'
+            # todo: if exists, raise FileExistsError(f'File(s) were created during writing: {must_not_overwrite}')
             if os.path.isfile(self.temp_path):
                 os.rename(self.temp_path, self.path)
                 self.temp_path = None
