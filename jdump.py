@@ -192,24 +192,26 @@ class DumpWriter:
 class DumpFile:
     rw_obj: Union[DumpReader, DumpWriter]
 
-    def __init__(self, path, mode='r', write_gz=False, unique=True, encoding='utf8', newline='\n', tempfile=False):
+    def __init__(self, path, mode='r', encoding='utf8', write_gz=False, unique=True, newline='\n', write_temp=False):
         """
         note that existing items are not accounted for uniqueness when appending
 
         :param path: string / pathlib.Path / pathlib.PurePath
         :param mode: (r)ead, (w)rite, (a)ppend, e(x)clusive creation
+        :param encoding: strongly recommended that you stick with utf-8
         :param write_gz: use gzip compression; if a string, sets the filename for writing
         :param unique: only read/write unique objects
-        :param encoding: strongly recommended that you stick with utf-8
         :param newline: recommended that you stick with '\n'
-        :param tempfile: write to a tempfile
+        :param write_temp: write to a temp (.partial) file
         """
         # verify mode is legit
-        if mode not in 'rwax':
+        mode = mode.lower()
+        if mode not in {'r', 'w', 'a', 'x'}:
             raise IOError(f'Mode not supported: {repr(mode)}')
 
         # normalize path
         self.path = Path(path).resolve()
+        assert not self.path.is_dir(), f'Target path is a directory: {self.path}'
 
         # init file objects
         self.file_obj = None
@@ -217,11 +219,11 @@ class DumpFile:
         self.temp_path = None
 
         # read/append mode (don't create new file)
-        if mode in 'ra':
+        if mode in {'r', 'a'}:
 
-            # warn that TEMPFILE flag is ignored
-            if tempfile:
-                warnings.warn(f'the TEMPFILE flag is ignored in {repr(mode)} mode')
+            # warn that WRITE_TEMP flag is ignored
+            if write_temp:
+                warnings.warn(f'the WRITE_TEMP flag is ignored in {repr(mode)} mode')
 
             # warn that WRITE_GZIP flag is ignored
             if write_gz:
@@ -251,11 +253,13 @@ class DumpFile:
 
             # prepare dir to write to
             if not self.path.parent.is_dir():
-                assert not self.path.parent.exists(), 'parent dir is not dir'
+                assert not self.path.parent.exists(), f'Target parent directory is not a directory: {self.path.parent}'
                 self.path.parent.mkdir(parents=True, exist_ok=True)
 
-            if tempfile:
+            # write to a temp path
+            if write_temp:
                 self.temp_path = self.path.with_suffix(self.path.suffix + '.partial')
+                assert not self.temp_path.is_dir()
 
             # the WRITE_GZIP flag is set
             if write_gz:
@@ -314,9 +318,11 @@ class DumpFile:
 
         # rename from temp path
         if self.temp_path is not None:
-            assert os.path.isfile(self.temp_path)
-            os.rename(self.temp_path, self.path)
-            self.temp_path = None
+            if os.path.isfile(self.temp_path):
+                os.rename(self.temp_path, self.path)
+                self.temp_path = None
+            else:
+                warnings.warn(f'Temp file does not exist: ({self.temp_path})')
 
     def __enter__(self):
         return self
@@ -424,6 +430,7 @@ def dump(json_iterator, paths, overwrite=True, unique=True):
         filenames.append(filename)
 
     # use a temp file
+    # todo: refactor out once the tempfile flag is ready
     temp_paths = []
     for path in paths:
         temp_path = os.path.abspath(path) + '.partial'
