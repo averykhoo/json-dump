@@ -192,7 +192,7 @@ class DumpWriter:
 class DumpFile:
     rw_obj: Union[DumpReader, DumpWriter]
 
-    def __init__(self, path, mode='r', write_gz=False, unique=True, encoding='utf8', newline='\n'):
+    def __init__(self, path, mode='r', write_gz=False, unique=True, encoding='utf8', newline='\n', tempfile=False):
         """
         note that existing items are not accounted for uniqueness when appending
 
@@ -202,6 +202,7 @@ class DumpFile:
         :param unique: only read/write unique objects
         :param encoding: strongly recommended that you stick with utf-8
         :param newline: recommended that you stick with '\n'
+        :param tempfile: write to a tempfile
         """
         # verify mode is legit
         if mode not in 'rwax':
@@ -213,9 +214,14 @@ class DumpFile:
         # init file objects
         self.file_obj = None
         self.gz = None
+        self.temp_path = None
 
         # read/append mode (don't create new file)
         if mode in 'ra':
+
+            # warn that TEMPFILE flag is ignored
+            if tempfile:
+                warnings.warn(f'the TEMPFILE flag is ignored in {repr(mode)} mode')
 
             # warn that WRITE_GZIP flag is ignored
             if write_gz:
@@ -248,6 +254,9 @@ class DumpFile:
                 assert not self.path.parent.exists(), 'parent dir is not dir'
                 self.path.parent.mkdir(parents=True, exist_ok=True)
 
+            if tempfile:
+                self.temp_path = self.path.with_suffix(self.path.suffix + '.partial')
+
             # the WRITE_GZIP flag is set
             if write_gz:
                 # get the filename from flag if possible
@@ -262,8 +271,11 @@ class DumpFile:
                     if filename.lower().endswith('.gz'):
                         filename = filename[:-3]
 
-                # _open = gzip.open
-                self.file_obj = io.open(str(self.path), mode=mode + 'b')
+                # open file to write bytes
+                if self.temp_path is not None:
+                    self.file_obj = io.open(str(self.temp_path), mode=mode + 'b')
+                else:
+                    self.file_obj = io.open(str(self.path), mode=mode + 'b')
 
                 # noinspection PyTypeChecker
                 self.gz = io.TextIOWrapper(gzip.GzipFile(filename=filename, mode=mode + 'b', fileobj=self.file_obj),
@@ -276,7 +288,10 @@ class DumpFile:
                     warnings.warn(f'write_gz=False, but file path ends with "gz": {self.path}')
 
                 # open text mode file
-                self.file_obj = io.open(str(self.path), mode=mode + 't', encoding=encoding, newline=newline)
+                if self.temp_path is not None:
+                    self.file_obj = io.open(str(self.temp_path), mode=mode + 't', encoding=encoding, newline=newline)
+                else:
+                    self.file_obj = io.open(str(self.path), mode=mode + 't', encoding=encoding, newline=newline)
 
             # create writer
             if self.gz is None:
@@ -296,6 +311,12 @@ class DumpFile:
             self.file_obj = None
         else:
             warnings.warn(f'File already closed: ({self.path})')
+
+        # rename from temp path
+        if self.temp_path is not None:
+            assert os.path.isfile(self.temp_path)
+            os.rename(self.temp_path, self.path)
+            self.temp_path = None
 
     def __enter__(self):
         return self
