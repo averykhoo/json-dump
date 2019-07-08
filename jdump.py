@@ -208,6 +208,7 @@ class DumpFile:
         mode = mode.lower()
         if mode not in {'r', 'w', 'a', 'x'}:
             raise IOError(f'Mode not supported: {repr(mode)}')
+        self.mode = mode
 
         # normalize path
         self.path = Path(path).resolve()
@@ -219,15 +220,15 @@ class DumpFile:
         self.temp_path = None
 
         # read/append mode (don't create new file)
-        if mode in {'r', 'a'}:
+        if self.mode in {'r', 'a'}:
 
             # warn that WRITE_TEMP flag is ignored
             if write_temp:
-                warnings.warn(f'the WRITE_TEMP flag is ignored in {repr(mode)} mode')
+                warnings.warn(f'the WRITE_TEMP flag is ignored in {repr(self.mode)} self.mode')
 
             # warn that WRITE_GZIP flag is ignored
             if write_gz:
-                warnings.warn(f'the WRITE_GZIP flag is ignored in {repr(mode)} mode')
+                warnings.warn(f'the WRITE_GZIP flag is ignored in {repr(self.mode)} self.mode')
 
             # determine whether to use gzip
             with io.open(str(self.path), mode='rb') as f:
@@ -238,17 +239,17 @@ class DumpFile:
                     _open = io.open
 
             # create file obj and reader/writer
-            if mode == 'r':
+            if self.mode == 'r':
                 self.file_obj = _open(str(self.path), mode='rt', encoding=encoding)
                 self.rw_obj = DumpReader(self.file_obj, unique=unique)
             else:
                 self.file_obj = _open(str(self.path), mode='at', encoding=encoding, newline=newline)
                 self.rw_obj = DumpWriter(self.file_obj, unique=unique)
 
-        # write/create mode (create new file)
+        # write/create self.mode (create new file)
         else:
             # if overwrite is disabled
-            if mode == 'x' and self.path.exists():
+            if self.mode == 'x' and self.path.exists():
                 raise FileExistsError(f'File already exists: {self.path}')
 
             # prepare dir to write to
@@ -277,7 +278,7 @@ class DumpFile:
 
                 # open file to write bytes
                 if self.temp_path is not None:
-                    self.file_obj = io.open(str(self.temp_path), mode=mode + 'b')
+                    self.file_obj = io.open(str(self.temp_path), mode=self.mode + 'b')
                 else:
                     self.file_obj = io.open(str(self.path), mode=mode + 'b')
 
@@ -318,9 +319,9 @@ class DumpFile:
 
         # rename from temp path
         if self.temp_path is not None:
-            # todo: check if mode was 'x'
-            # todo: if exists, raise FileExistsError(f'File(s) were created during writing: {must_not_overwrite}')
             if os.path.isfile(self.temp_path):
+                if self.mode == 'x' and self.path.exists():
+                    raise FileExistsError(f'File was created by other process during writing: {self.path}')
                 os.rename(self.temp_path, self.path)
                 self.temp_path = None
             else:
@@ -431,17 +432,16 @@ def dump(json_iterator, paths, overwrite=True, unique=True):
             filename = False
         filenames.append(filename)
 
-    # use a temp file
-    # todo: refactor out once the tempfile flag is ready
-    temp_paths = []
-    for path in paths:
-        temp_path = os.path.abspath(path) + '.partial'
-        temp_paths.append(temp_path)
+    #  if OVERWRITE is unset then we want exclusive creation mode
+    if overwrite:
+        mode = 'w'
+    else:
+        mode = 'x'
 
     # make output files
     files = []
-    for temp_path, filename in zip(temp_paths, filenames):
-        f = DumpFile(temp_path, mode='w', write_gz=filename, unique=unique)
+    for path, filename in zip(paths, filenames):
+        f = DumpFile(path, mode=mode, write_gz=filename, unique=unique, write_temp=True)
         files.append(f)
 
     # write items
@@ -462,17 +462,6 @@ def dump(json_iterator, paths, overwrite=True, unique=True):
         f.close()
 
     # remove original file
-    must_not_overwrite = []
-    for path, temp_path in zip(paths, temp_paths):
-        if os.path.exists(path):
-            if not overwrite:
-                # someone else created the file we want to exclusively create while we were doing stuff
-                must_not_overwrite.append(path)
-            os.remove(path)
-        os.rename(temp_path, path)
-
-    if must_not_overwrite:
-        raise FileExistsError(f'File(s) were created during writing: {must_not_overwrite}')
     return n_written
 
 
