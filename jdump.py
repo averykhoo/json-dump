@@ -33,6 +33,7 @@ def resolve_glob(glob_patterns):
 
     paths = set()
     for glob_pattern in glob_patterns:
+        assert isinstance(glob_pattern, (str, os.PathLike)), glob_pattern
         paths.update(glob.glob(os.path.abspath(glob_pattern), recursive=True))
     return sorted(paths)
 
@@ -218,6 +219,7 @@ class DumpFile:
         self.file_obj = None
         self.gz = None
         self.temp_path = None
+        self.temp_obj = None
 
         # read/append mode (don't create new file)
         if self.mode in {'r', 'a'}:
@@ -257,15 +259,17 @@ class DumpFile:
                 assert not self.path.parent.exists(), f'Target parent directory is not a directory: {self.path.parent}'
                 self.path.parent.mkdir(parents=True, exist_ok=True)
 
-            # write to a temp path
+            # check the temp path
             if write_temp:
                 self.temp_path = self.path.with_suffix(self.path.suffix + '.partial')
-                assert not self.temp_path.is_dir()
+                if self.temp_path.exists():
+                    assert not self.temp_path.is_dir()
+                    self.temp_path.unlink()
 
             # the WRITE_GZIP flag is set
             if write_gz:
                 # get the filename from flag if possible
-                if isinstance(write_gz, str) or isinstance(write_gz, os.PathLike):
+                if isinstance(write_gz, (str, os.PathLike)):
                     filename = os.path.basename(write_gz)  # maybe someone put in a full path
 
                 # otherwise get from self.path
@@ -279,6 +283,8 @@ class DumpFile:
                 # open file to write bytes
                 if self.temp_path is not None:
                     self.file_obj = io.open(str(self.temp_path), mode=self.mode + 'b')
+                    if self.mode == 'x':
+                        self.temp_obj = io.open(str(self.path), mode='xb')  # chope the original path
                 else:
                     self.file_obj = io.open(str(self.path), mode=mode + 'b')
 
@@ -295,6 +301,8 @@ class DumpFile:
                 # open text mode file
                 if self.temp_path is not None:
                     self.file_obj = io.open(str(self.temp_path), mode=mode + 't', encoding=encoding, newline=newline)
+                    if self.mode == 'x':
+                        self.temp_obj = io.open(str(self.path), mode='xb')  # chope the original path
                 else:
                     self.file_obj = io.open(str(self.path), mode=mode + 't', encoding=encoding, newline=newline)
 
@@ -317,12 +325,18 @@ class DumpFile:
         else:
             warnings.warn(f'File already closed: ({self.path})')
 
+        # close choped file path
+        if self.temp_obj is not None:
+            self.temp_obj.close()
+            self.temp_obj = None
+            self.path.unlink()
+
         # rename from temp path
         if self.temp_path is not None:
-            if os.path.isfile(self.temp_path):
-                if self.mode == 'x' and self.path.exists():
-                    raise FileExistsError(f'File was created by other process during writing: {self.path}')
-                os.rename(self.temp_path, self.path)
+            if self.temp_path.is_file():
+                if self.path.exists():
+                    self.path.unlink()
+                self.temp_path.rename(self.path)
                 self.temp_path = None
             else:
                 warnings.warn(f'Temp file does not exist: ({self.temp_path})')
@@ -407,7 +421,7 @@ def dump(json_iterator, paths, overwrite=True, unique=True):
     :return: number of objects written
     """
     # convert to list if it's a single path
-    if isinstance(paths, str) or isinstance(paths, os.PathLike):
+    if isinstance(paths, (str, os.PathLike)):
         paths = [paths]
     paths = [os.path.abspath(path) for path in paths]
 
