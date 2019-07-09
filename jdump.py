@@ -4,7 +4,11 @@ import io
 import json
 import os
 import warnings
+from io import TextIOWrapper
 from pathlib import Path
+from typing import BinaryIO
+from typing import Optional
+from typing import TextIO
 from typing import Union
 
 
@@ -191,6 +195,13 @@ class DumpWriter:
 
 
 class DumpFile:
+    path: Path
+    temp_path: Optional[Path]
+
+    file_obj: Union[TextIO, BinaryIO, None]
+    gz: Optional[TextIOWrapper]
+    temp_lock: Optional[BinaryIO]
+
     rw_obj: Union[DumpReader, DumpWriter]
 
     def __init__(self, path, mode='r', encoding='utf8', write_gz=False, unique=True, newline='\n', write_temp=False):
@@ -214,11 +225,11 @@ class DumpFile:
         # normalize path
         self.path = Path(path).resolve()
         assert not self.path.is_dir(), f'Target path is a directory: {self.path}'
+        self.temp_path = None
 
         # init file objects
         self.file_obj = None
         self.gz = None
-        self.temp_path = None
         self.temp_lock = None  # write-lock target path if using a temp path
 
         # read/append mode (don't create new file)

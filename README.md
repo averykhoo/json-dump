@@ -61,6 +61,8 @@ jdump.dump(json_objs, ['path/to/file.txt',
 -   Valid modes are `r`, `w`, `a`, and `x`
 -   To compress, set `write_gz` to your preferred filename (or to `True` if you want to be lazy)
 -   Gzip compression is auto-detected when reading/appending
+-   To write to a temp file, set `write_temp` to true
+
 ```python
 from pprint import pprint
 import jdump
