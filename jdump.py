@@ -230,7 +230,7 @@ class DumpFile:
         # init file objects
         self.file_obj = None
         self.gz = None
-        self.temp_lock = None  # write-lock target path if using a temp path
+        # self.temp_lock = None  # write-lock target path if using a temp path
 
         # read/append mode (don't create new file)
         if self.mode in {'r', 'a'}:
@@ -293,11 +293,11 @@ class DumpFile:
 
                 # open file to write bytes
                 if self.temp_path is not None:
-                    # chope original path
-                    if self.mode == 'x':
-                        self.temp_lock = io.open(str(self.path), mode='xb')
-                    else:
-                        self.temp_lock = io.open(str(self.path), mode='ab')  # don't overwrite
+                    # # chope original path
+                    # if self.mode == 'x':
+                    #     self.temp_lock = io.open(str(self.path), mode='xb')
+                    # else:
+                    #     self.temp_lock = io.open(str(self.path), mode='ab')  # don't overwrite
                     # temp path
                     self.file_obj = io.open(str(self.temp_path), mode=self.mode + 'b')
                 else:
@@ -315,11 +315,11 @@ class DumpFile:
 
                 # open text mode file
                 if self.temp_path is not None:
-                    # chope original path
-                    if self.mode == 'x':
-                        self.temp_lock = io.open(str(self.path), mode='xb')
-                    else:
-                        self.temp_lock = io.open(str(self.path), mode='ab')  # don't overwrite
+                    # # chope original path
+                    # if self.mode == 'x':
+                    #     self.temp_lock = io.open(str(self.path), mode='xb')
+                    # else:
+                    #     self.temp_lock = io.open(str(self.path), mode='ab')  # don't overwrite
                     # temp path
                     self.file_obj = io.open(str(self.temp_path), mode=mode + 't', encoding=encoding, newline=newline)
                 else:
@@ -344,10 +344,10 @@ class DumpFile:
         else:
             warnings.warn(f'File already closed: ({self.path})')
 
-        # close choped file path
-        if self.temp_lock is not None:
-            self.temp_lock.close()
-            self.temp_lock = None
+        # # close choped file path
+        # if self.temp_lock is not None:
+        #     self.temp_lock.close()
+        #     self.temp_lock = None
 
         # rename from temp path
         if self.temp_path is not None:
