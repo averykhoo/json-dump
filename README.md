@@ -132,6 +132,19 @@ with open('some_file.txt', 'wt', encoding='utf8') as f:
 ```
 
 
+### Editing objects
+-   you should read and write to separate files to avoid loading everything into memory at once
+-   this also spreads out the IO load, which is usually higher than the CPU load
+```python
+import jdump
+
+with jdump.open('output.txt.gz', mode='w', write_gz=True) as f:
+    for json_obj in jdump.load('input.txt'):
+        json_obj['content'] = 'hello world'
+        f.write(json_obj)  # note that `json_obj` is a dictionary, not a string
+```
+
+
 ### Other `DumpFile` methods/attributes
 -   `DumpFile.path` <-- path of the file (as a `pathlib.Path` object)
 -   `DumpFile.get_count()` <-- how many items have been read/written since the file was opened
