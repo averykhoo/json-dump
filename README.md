@@ -1,5 +1,5 @@
 #   JSON dump
--   The original page for this project is `https://github.com/averykhoo/json_dump`
+-   The original page for this project is `https://github.com/averykhoo/json-dump`
 -   NOTE: Default behavior is to drop duplicates when reading/writing, set `unique=False` to read/write all objects
 
 
