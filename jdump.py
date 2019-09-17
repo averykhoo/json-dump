@@ -12,23 +12,35 @@ from typing import TextIO
 from typing import Union
 
 
-def format_bytes(num):
+def format_bytes(num_bytes):
     """
-    string formatting
-    :type num: int
+    :type num_bytes: int
     :rtype: str
     """
-    num = abs(num)
-    if num == 0:
-        return '0 Bytes'
-    elif num == 1:
-        return '1 Byte'
+
+    # handle negatives
+    if num_bytes < 0:
+        minus = '-'
+    else:
+        minus = ''
+    num_bytes = abs(num_bytes)
+
+    # ±1 byte (singular form)
+    if num_bytes == 1:
+        return f'{minus}1 Byte'
+
+    # determine unit
     unit = 0
-    while num >= 1024 and unit < 8:
-        num /= 1024.0
+    while unit < 8 and num_bytes > 999:
+        num_bytes /= 1024.0
         unit += 1
     unit = ['Bytes', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB'][unit]
-    return ('%.2f %s' if num % 1 else '%d %s') % (num, unit)
+
+    # exact or float
+    if num_bytes % 1:
+        return f'{minus}{num_bytes:,.2f} {unit}'
+    else:
+        return f'{minus}{num_bytes:,.0f} {unit}'
 
 
 def resolve_glob(glob_patterns):
@@ -62,8 +74,10 @@ def _reader(file_obj, separator):
         yield json_buffer
         json_buffer = []
 
-    # make sure no data was dropped
-    assert not ''.join(json_buffer).strip(), f'input json must end with {repr(separator)}'
+    # dump files must end with separator, so we should never trigger this
+    if ''.join(json_buffer).strip():
+        warnings.warn(f'dump file did not end with {repr(separator)} and may be corrupt')
+        yield json_buffer
 
 
 class DumpReader:
@@ -438,9 +452,9 @@ def dump(json_iterator, paths, overwrite=True, unique=True):
     :param unique: don't write duplicates
     :return: number of objects written
     """
-    # convert to list if it's a single path
+    # normalize `paths` to list of strings
     if isinstance(paths, (str, os.PathLike)):
-        paths = [paths]
+        paths = [os.path.abspath(paths)]
     paths = [os.path.abspath(path) for path in paths]
 
     # no output paths
@@ -459,7 +473,7 @@ def dump(json_iterator, paths, overwrite=True, unique=True):
         if filename.lower().endswith('.gz'):
             filename = filename[:-3]
         elif filename.lower().endswith('gz'):
-            warnings.warn(f'GZIP is enabled but internal filename is: {filename}')
+            warnings.warn(f'GZIP is enabled but internal filename will match external filename: {filename}')
         else:
             filename = False
         filenames.append(filename)
