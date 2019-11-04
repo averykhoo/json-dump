@@ -102,10 +102,10 @@ class DumpReader:
 
         # if UNIQUE flag is set
         if self.seen is not None:
-            json_hash = hash(json.dumps(json_obj, sort_keys=True, ensure_ascii=False, allow_nan=True))
+            json_hash = hash(json.dumps(json_obj, sort_keys=True, ensure_ascii=False, allow_nan=False))
             while json_hash in self.seen:
                 json_obj = json.loads(''.join(next(self._reader)))
-                json_hash = hash(json.dumps(json_obj, sort_keys=True, ensure_ascii=False, allow_nan=True))
+                json_hash = hash(json.dumps(json_obj, sort_keys=True, ensure_ascii=False, allow_nan=False))
             self.seen.add(json_hash)
 
         self.count += 1
@@ -184,7 +184,7 @@ class DumpWriter:
         :param json_obj: object to write
         :return: True if object was written, else False (eg. for duplicates)
         """
-        formatted_json = json.dumps(json_obj, indent=self.indent, sort_keys=True, ensure_ascii=False, allow_nan=True)
+        formatted_json = json.dumps(json_obj, indent=self.indent, sort_keys=True, ensure_ascii=False, allow_nan=False)
 
         # if UNIQUE flag is set
         if self.seen is not None:
@@ -434,7 +434,7 @@ def load(glob_paths, unique=True, verbose=True):
         with DumpFile(path, mode='r', unique=False) as f:
             for json_obj in f:
                 if seen is not None:
-                    json_hash = hash(json.dumps(json_obj, sort_keys=True, ensure_ascii=False, allow_nan=True))
+                    json_hash = hash(json.dumps(json_obj, sort_keys=True, ensure_ascii=False, allow_nan=False))
                     if json_hash in seen:
                         continue
                     seen.add(json_hash)
