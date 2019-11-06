@@ -214,7 +214,6 @@ class DumpFile:
 
     file_obj: Union[TextIO, BinaryIO, None]
     gz: Optional[TextIOWrapper]
-    temp_lock: Optional[BinaryIO]
 
     rw_obj: Union[DumpReader, DumpWriter]
 
@@ -244,7 +243,6 @@ class DumpFile:
         # init file objects
         self.file_obj = None
         self.gz = None
-        # self.temp_lock = None  # write-lock target path if using a temp path
 
         # read/append mode (don't create new file)
         if self.mode in {'r', 'a'}:
@@ -258,7 +256,7 @@ class DumpFile:
                 warnings.warn(f'the WRITE_GZIP flag is ignored in {repr(self.mode)} self.mode')
 
             # determine whether to use gzip
-            with io.open(str(self.path), mode='rb') as f:
+            with io.open(str(self.path), mode='rb') as f:  # use `io.open` to avoid namespace collision
                 b = f.read(2)
                 if b == b'\x1f\x8b':
                     _open = gzip.open
@@ -305,14 +303,8 @@ class DumpFile:
                     if filename.lower().endswith('.gz'):
                         filename = filename[:-3]
 
-                # open file to write bytes
+                # open temp file to write bytes
                 if self.temp_path is not None:
-                    # # chope original path
-                    # if self.mode == 'x':
-                    #     self.temp_lock = io.open(str(self.path), mode='xb')
-                    # else:
-                    #     self.temp_lock = io.open(str(self.path), mode='ab')  # don't overwrite
-                    # temp path
                     self.file_obj = io.open(str(self.temp_path), mode=self.mode + 'b')
                 else:
                     self.file_obj = io.open(str(self.path), mode=mode + 'b')
@@ -327,14 +319,8 @@ class DumpFile:
                 if self.path.name.endswith('gz'):
                     warnings.warn(f'write_gz=False, but file path ends with "gz": {self.path}')
 
-                # open text mode file
+                # open text mode temp file
                 if self.temp_path is not None:
-                    # # chope original path
-                    # if self.mode == 'x':
-                    #     self.temp_lock = io.open(str(self.path), mode='xb')
-                    # else:
-                    #     self.temp_lock = io.open(str(self.path), mode='ab')  # don't overwrite
-                    # temp path
                     self.file_obj = io.open(str(self.temp_path), mode=mode + 't', encoding=encoding, newline=newline)
                 else:
                     self.file_obj = io.open(str(self.path), mode=mode + 't', encoding=encoding, newline=newline)
@@ -357,11 +343,6 @@ class DumpFile:
             self.file_obj = None
         else:
             warnings.warn(f'File already closed: ({self.path})')
-
-        # # close choped file path
-        # if self.temp_lock is not None:
-        #     self.temp_lock.close()
-        #     self.temp_lock = None
 
         # rename from temp path
         if self.temp_path is not None:
@@ -484,28 +465,46 @@ def dump(json_iterator, paths, overwrite=True, unique=True):
     else:
         mode = 'x'
 
-    # make output files
+    # we need a list of files, and will return the number of written objects for any single file (all the same)
     files = []
-    for path, filename in zip(paths, filenames):
-        f = DumpFile(path, mode=mode, write_gz=filename, unique=unique, write_temp=True)
-        files.append(f)
-
-    # write items
-    if len(files) == 1:
-        files[0].writemany(json_iterator)
-    else:
-        for json_obj in json_iterator:
-            for f in files:
-                f.write(json_obj)
-
-    # close files
     n_written = None
-    for f in files:
-        if n_written is None:
-            n_written = f.get_count()
+
+    # enclose file handlers in try-finally to ENSURE everything is closed
+    try:
+        # make output files
+        for path, filename in zip(paths, filenames):
+            f = DumpFile(path, mode=mode, write_gz=filename, unique=unique, write_temp=True)
+            files.append(f)
+
+        # write items
+        if len(files) == 1:
+            files[0].writemany(json_iterator)
         else:
-            assert n_written == f.get_count()
-        f.close()
+            for json_obj in json_iterator:
+                for f in files:
+                    f.write(json_obj)
+
+        # count number of items written
+        for f in files:
+            f.flush()  # why not
+            if n_written is None:
+                n_written = f.get_count()
+            else:
+                assert n_written == f.get_count()
+
+    # make sure we close all the files
+    finally:
+        last_seen_error = None
+        for f in files:
+            try:
+                f.close()
+
+            except Exception as e:
+                warnings.warn(e)
+                last_seen_error = e
+
+        if last_seen_error is not None:
+            raise last_seen_error
 
     # remove original file
     return n_written
