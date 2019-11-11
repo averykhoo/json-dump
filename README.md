@@ -169,3 +169,6 @@ with jdump.open('output.txt.gz', mode='w', write_gz=True) as f:
 
 ###  Why is the UNIQUE flag on by default?
 -   I personally don't need duplicate objects returned when reading my files
+
+### Why not [Avro](https://fastavro.readthedocs.io/en/latest/) or [Parquet](https://arrow.apache.org/docs/python/parquet.html)
+-   Why not indeed
