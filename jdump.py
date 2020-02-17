@@ -7,17 +7,14 @@ import warnings
 from io import TextIOWrapper
 from pathlib import Path
 from typing import BinaryIO
+from typing import Iterable
+from typing import List
 from typing import Optional
 from typing import TextIO
 from typing import Union
 
 
-def format_bytes(num_bytes):
-    """
-    :type num_bytes: int
-    :rtype: str
-    """
-
+def format_bytes(num_bytes: int) -> str:
     # handle negatives
     if num_bytes < 0:
         minus = '-'
@@ -43,7 +40,7 @@ def format_bytes(num_bytes):
         return f'{minus}{num_bytes:,.0f} {unit}'
 
 
-def resolve_glob(glob_patterns):
+def resolve_glob(glob_patterns: Union[str, os.PathLike, Iterable[Union[str, os.PathLike]]]) -> List[str]:
     if isinstance(glob_patterns, (str, os.PathLike)):
         glob_patterns = [glob_patterns]
 
@@ -160,7 +157,7 @@ class DumpReader:
 
 
 class DumpWriter:
-    def __init__(self, f, unique=True, separator='--', indent=4):
+    def __init__(self, f: TextIO, unique: bool = True, separator: str = '--', indent=4):
         """
         :param f: file-like object in write-text mode
         :param unique: skip (do not write) duplicate objects
@@ -176,7 +173,7 @@ class DumpWriter:
         else:
             self.seen = None
 
-    def write(self, json_obj):
+    def write(self, json_obj) -> bool:
         """
         write a single json object
         (given a list, writes the entire list as a single object)
@@ -197,7 +194,7 @@ class DumpWriter:
         self.count += 1
         return True
 
-    def writemany(self, json_iterator):
+    def writemany(self, json_iterator: Iterable) -> int:
         """
         write multiple json objects from an iterator
         (given a list, writes each item in the list separately)
@@ -422,7 +419,7 @@ def load(glob_paths, unique=True, verbose=True):
                 yield json_obj
 
 
-def dump(json_iterator, paths, overwrite=True, unique=True):
+def dump(json_iterator: Iterable, paths, overwrite: bool = True, unique: bool = True) -> int:
     """
     like json.dump but writes many objects to a single output file
     writes to a temp file before finally renaming the file at the end
