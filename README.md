@@ -1,6 +1,8 @@
 #   JSON dump
--   The original page for this project is `https://github.com/averykhoo/json-dump`
+Dump multiple JSON objects into a single file
+
 -   NOTE: Default behavior is to drop duplicates when reading/writing, set `unique=False` to read/write all objects
+-   NOTE: Default behavior is to sort keys, since this was written prior to Python 3.7
 
 
 ##  Usage
@@ -57,7 +59,7 @@ jdump.dump(json_objs, ['path/to/file.txt',
 ## Advanced Usage
 
 ### Open a file (read/write/append/create)
--   Usage of `jdump.open` is similar to `io.open` or `gzip.open`
+-   Usage of `jdump.open` is similar to `io.open` or `gzip.open`, but you can feed it any json-like object
 -   Valid modes are `r`, `w`, `a`, and `x`
 -   To compress, set `write_gz` to your preferred filename (or to `True` if you want to be lazy)
 -   Gzip compression is auto-detected when reading/appending
@@ -134,7 +136,7 @@ with open('some_file.txt', 'wt', encoding='utf8') as f:
 
 ### Editing objects
 -   you should read and write to separate files to avoid loading everything into memory at once
--   this also spreads out the IO load, which is usually higher than the CPU load
+-   this also spreads out the IO load, which is (on my spinning rust) usually higher than the CPU load
 ```python
 import jdump
 
@@ -169,6 +171,12 @@ with jdump.open('output.txt.gz', mode='w', write_gz=True) as f:
 
 ###  Why is the UNIQUE flag on by default?
 -   I personally don't need duplicate objects returned when reading my files
+
+### Why not [json](https://docs.python.org/3/library/json.html)
+-   From the docs:
+    **Note:** Unlike pickle and marshal, JSON is not a framed protocol, 
+              so trying to serialize multiple objects with repeated calls to dump() 
+              using the same fp will result in an invalid JSON file.
 
 ### Why not [Avro](https://fastavro.readthedocs.io/en/latest/) or [Parquet](https://arrow.apache.org/docs/python/parquet.html)
 -   Why not indeed
